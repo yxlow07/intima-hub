@@ -1,0 +1,14 @@
+@import "tailwindcss";
+
+@keyframes pulse-red {
+  0%, 100% {
+    background-color: rgb(245, 208, 208);
+  }
+  50% {
+    background-color: rgb(254, 226, 226);
+  }
+}
+
+.pulse-red-next {
+  animation: pulse-red 3.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}

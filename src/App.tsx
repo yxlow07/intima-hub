@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Submission, User, Affiliate } from './types';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
+import UsersPage from './pages/Users';
+import AffiliatesPage from './pages/Affiliates';
 import SubmissionPage from './pages/Submission';
 import Tracker from './pages/Tracker';
 import SubmissionDetail from './pages/SubmissionDetail';
@@ -18,7 +20,7 @@ const getUTC8Timestamp = (): string => {
 };
 
 export default function INTIMAHub() {
-    const [currentView, setCurrentView] = useState<'login' | 'dashboard' | 'submission' | 'tracker' | 'submission-detail' | 'submission-view'>('login');
+    const [currentView, setCurrentView] = useState<'login' | 'dashboard' | 'users' | 'affiliates' | 'submission' | 'tracker' | 'submission-detail' | 'submission-view'>('login');
     const [currentUser, setCurrentUser] = useState<User | null>(null);
     const [submissions, setSubmissions] = useState<Submission[]>([]);
     const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null);
@@ -262,6 +264,14 @@ export default function INTIMAHub() {
                         setCurrentView={setCurrentView}
                         setSelectedSubmission={setSelectedSubmission}
                     />
+                )}
+
+                {currentView === 'users' && currentUser?.role === 'intima' && (
+                    <UsersPage currentUser={currentUser} />
+                )}
+
+                {currentView === 'affiliates' && currentUser?.role === 'intima' && (
+                    <AffiliatesPage />
                 )}
 
                 {currentView === 'submission-detail' && selectedSubmission && (

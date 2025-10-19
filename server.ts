@@ -972,6 +972,408 @@ app.put('/api/submissions/:id/department-review', async (req, res) => {
   }
 });
 
+// User Management Endpoints
+// Get all users
+app.get('/api/users', async (req, res) => {
+  try {
+    const allUsers = await db.select().from(users);
+    
+    // Return users without passwords
+    const safeUsers = allUsers.map(user => ({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      affiliates: user.affiliates,
+      permissions: user.permissions,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    }));
+
+    res.json(safeUsers);
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// Get a single user by ID
+app.get('/api/users/:id', async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const user = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, id))
+      .limit(1)
+      .then(rows => rows[0]);
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Return user without password
+    res.json({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      affiliates: user.affiliates,
+      permissions: user.permissions,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    });
+  } catch (error) {
+    console.error('Error fetching user:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// Create a new user
+app.post('/api/users', async (req, res) => {
+  const { id, name, email, password, role, affiliates } = req.body;
+
+  if (!id || !name || !email || !password || !role) {
+    return res.status(400).json({ message: 'All fields are required' });
+  }
+
+  if (!['student', 'intima'].includes(role)) {
+    return res.status(400).json({ message: 'Invalid role' });
+  }
+
+  try {
+    // Check if user already exists
+    const existingUser = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, id))
+      .limit(1)
+      .then(rows => rows[0]);
+
+    if (existingUser) {
+      return res.status(400).json({ message: 'User with this ID already exists' });
+    }
+
+    // Check if email already exists
+    const existingEmail = await db
+      .select()
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1)
+      .then(rows => rows[0]);
+
+    if (existingEmail) {
+      return res.status(400).json({ message: 'User with this email already exists' });
+    }
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Create user
+    const newUser = await db
+      .insert(users)
+      .values({
+        id,
+        name,
+        email,
+        password: hashedPassword,
+        role,
+        affiliates: affiliates ? JSON.stringify(affiliates) : JSON.stringify([]),
+        permissions: [],
+        createdAt: getUTC8Date(),
+        updatedAt: getUTC8Date(),
+      })
+      .returning();
+
+    // Return user without password
+    res.status(201).json({
+      message: 'User created successfully',
+      user: {
+        id: newUser[0].id,
+        name: newUser[0].name,
+        email: newUser[0].email,
+        role: newUser[0].role,
+        affiliates: newUser[0].affiliates,
+        permissions: newUser[0].permissions,
+        createdAt: newUser[0].createdAt,
+        updatedAt: newUser[0].updatedAt,
+      }
+    });
+  } catch (error) {
+    console.error('Error creating user:', error);
+    res.status(500).json({ message: 'Internal server error', error: (error as any).message });
+  }
+});
+
+// Update a user
+app.put('/api/users/:id', async (req, res) => {
+  const { id } = req.params;
+  const { name, email, password, role, affiliates, newId } = req.body;
+
+  try {
+    // Check if user exists
+    const user = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, id))
+      .limit(1)
+      .then(rows => rows[0]);
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Check if new email already exists (if changing email)
+    if (email && email !== user.email) {
+      const existingEmail = await db
+        .select()
+        .from(users)
+        .where(eq(users.email, email))
+        .limit(1)
+        .then(rows => rows[0]);
+
+      if (existingEmail) {
+        return res.status(400).json({ message: 'Email already in use' });
+      }
+    }
+
+    // Check if new ID already exists (if changing ID)
+    if (newId && newId !== user.id) {
+      const existingId = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, newId))
+        .limit(1)
+        .then(rows => rows[0]);
+
+      if (existingId) {
+        return res.status(400).json({ message: 'User ID already in use' });
+      }
+    }
+
+    const updateData: any = {
+      updatedAt: getUTC8Date(),
+    };
+
+    if (name) updateData.name = name;
+    if (email) updateData.email = email;
+    if (role && ['student', 'intima'].includes(role)) updateData.role = role;
+    if (password) updateData.password = await bcrypt.hash(password, 10);
+    if (affiliates !== undefined) updateData.affiliates = JSON.stringify(affiliates);
+
+    let updatedUser;
+    
+    if (newId && newId !== id) {
+      // If ID is changing, delete old user and create new one with updated data
+      await db.delete(users).where(eq(users.id, id));
+      
+      // Create user with new ID
+      const result = await db
+        .insert(users)
+        .values({
+          id: newId,
+          name: updateData.name || user.name,
+          email: updateData.email || user.email,
+          password: updateData.password || user.password,
+          role: updateData.role || user.role,
+          affiliates: updateData.affiliates || user.affiliates,
+          permissions: user.permissions,
+          createdAt: user.createdAt,
+          updatedAt: getUTC8Date(),
+        })
+        .returning();
+      
+      updatedUser = result;
+    } else {
+      updatedUser = await db
+        .update(users)
+        .set(updateData)
+        .where(eq(users.id, id))
+        .returning();
+    }
+
+    // Return user without password
+    res.json({
+      message: 'User updated successfully',
+      user: {
+        id: updatedUser[0].id,
+        name: updatedUser[0].name,
+        email: updatedUser[0].email,
+        role: updatedUser[0].role,
+        affiliates: updatedUser[0].affiliates,
+        permissions: updatedUser[0].permissions,
+        createdAt: updatedUser[0].createdAt,
+        updatedAt: updatedUser[0].updatedAt,
+      }
+    });
+  } catch (error) {
+    console.error('Error updating user:', error);
+    res.status(500).json({ message: 'Internal server error', error: (error as any).message });
+  }
+});
+
+// Affiliate Management Endpoints
+// Get all affiliates
+app.get('/api/affiliates', async (req, res) => {
+  try {
+    const allAffiliates = await db.select().from(affiliates);
+    res.json(allAffiliates);
+  } catch (error) {
+    console.error('Error fetching affiliates:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// Get a single affiliate by ID
+app.get('/api/affiliates/:id', async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const affiliate = await db
+      .select()
+      .from(affiliates)
+      .where(eq(affiliates.id, id))
+      .limit(1)
+      .then(rows => rows[0]);
+
+    if (!affiliate) {
+      return res.status(404).json({ message: 'Affiliate not found' });
+    }
+
+    res.json(affiliate);
+  } catch (error) {
+    console.error('Error fetching affiliate:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// Create a new affiliate
+app.post('/api/affiliates', async (req, res) => {
+  const { name, description, category, status, memberCount, advisorId, committeeMembers } = req.body;
+
+  if (!name || !category || !status || !advisorId) {
+    return res.status(400).json({ message: 'Name, category, status, and advisor ID are required' });
+  }
+
+  if (!['Sports', 'Academic', 'Special Interest', 'Service'].includes(category)) {
+    return res.status(400).json({ message: 'Invalid category' });
+  }
+
+  if (!['Active', 'Inactive', 'Pending Approval'].includes(status)) {
+    return res.status(400).json({ message: 'Invalid status' });
+  }
+
+  try {
+    const newAffiliate = await db
+      .insert(affiliates)
+      .values({
+        name,
+        description: description || null,
+        category,
+        status,
+        memberCount: memberCount || 0,
+        advisorId,
+        committeeMembers: Array.isArray(committeeMembers) ? committeeMembers : [],
+        createdAt: getUTC8Date(),
+        updatedAt: getUTC8Date(),
+      })
+      .returning();
+
+    res.status(201).json({
+      message: 'Affiliate created successfully',
+      affiliate: newAffiliate[0]
+    });
+  } catch (error) {
+    console.error('Error creating affiliate:', error);
+    res.status(500).json({ message: 'Internal server error', error: (error as any).message });
+  }
+});
+
+// Update an affiliate
+app.put('/api/affiliates/:id', async (req, res) => {
+  const { id } = req.params;
+  const { name, description, category, status, memberCount, advisorId, committeeMembers } = req.body;
+
+  try {
+    // Check if affiliate exists
+    const affiliate = await db
+      .select()
+      .from(affiliates)
+      .where(eq(affiliates.id, id))
+      .limit(1)
+      .then(rows => rows[0]);
+
+    if (!affiliate) {
+      return res.status(404).json({ message: 'Affiliate not found' });
+    }
+
+    // Validate category and status if provided
+    if (category && !['Sports', 'Academic', 'Special Interest', 'Service'].includes(category)) {
+      return res.status(400).json({ message: 'Invalid category' });
+    }
+
+    if (status && !['Active', 'Inactive', 'Pending Approval'].includes(status)) {
+      return res.status(400).json({ message: 'Invalid status' });
+    }
+
+    const updateData: any = {
+      updatedAt: getUTC8Date(),
+    };
+
+    if (name) updateData.name = name;
+    if (description !== undefined) updateData.description = description || null;
+    if (category) updateData.category = category;
+    if (status) updateData.status = status;
+    if (memberCount !== undefined) updateData.memberCount = memberCount;
+    if (advisorId) updateData.advisorId = advisorId;
+    if (committeeMembers !== undefined) {
+      updateData.committeeMembers = Array.isArray(committeeMembers) ? committeeMembers : [];
+    }
+
+    const updatedAffiliate = await db
+      .update(affiliates)
+      .set(updateData)
+      .where(eq(affiliates.id, id))
+      .returning();
+
+    res.json({
+      message: 'Affiliate updated successfully',
+      affiliate: updatedAffiliate[0]
+    });
+  } catch (error) {
+    console.error('Error updating affiliate:', error);
+    res.status(500).json({ message: 'Internal server error', error: (error as any).message });
+  }
+});
+
+// Delete an affiliate
+app.delete('/api/affiliates/:id', async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    // Check if affiliate exists
+    const affiliate = await db
+      .select()
+      .from(affiliates)
+      .where(eq(affiliates.id, id))
+      .limit(1)
+      .then(rows => rows[0]);
+
+    if (!affiliate) {
+      return res.status(404).json({ message: 'Affiliate not found' });
+    }
+
+    // Delete affiliate
+    await db.delete(affiliates).where(eq(affiliates.id, id));
+
+    res.json({ message: 'Affiliate deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting affiliate:', error);
+    res.status(500).json({ message: 'Internal server error', error: (error as any).message });
+  }
+});
+
 app.listen(port, () => {
   console.log(`Server is running on http://localhost:${port}`);
 });

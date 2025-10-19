@@ -40,6 +40,9 @@ INTIMA Hub is a full-stack application designed to streamline the submission and
 8. [Key Features Deep Dive](#key-features-deep-dive)
 9. [Amendment Workflow](#amendment-workflow)
 10. [File Naming Convention](#file-naming-convention)
+11. [Admin Management Features](#-admin-management-features)
+12. [Admin Dashboard](#-admin-dashboard)
+13. [Admin Navigation](#-admin-navigation)
 
 ---
 
@@ -82,9 +85,12 @@ intima_hub/
 │   ├── pages/
 │   │   ├── Login.tsx            # Authentication page
 │   │   ├── Dashboard.tsx        # INTIMA admin submission overview
+│   │   ├── Users.tsx            # User management (CRUD)
+│   │   ├── Affiliates.tsx       # Affiliate management (CRUD)
 │   │   ├── Submission.tsx       # Student form for creating submissions
 │   │   ├── SubmissionDetail.tsx # Detailed view with review interface
 │   │   ├── Tracker.tsx          # Student submission status tracker
+│   │   ├── SubmissionView.tsx   # Student submission view page
 │   │   └── Feedback.tsx         # Feedback/comments display
 │   ├── db/
 │   │   ├── schema.ts            # Database table definitions
@@ -808,17 +814,163 @@ All timestamps throughout the application use **UTC+8** (Singapore/Malaysia time
 
 ---
 
+## 🔐 Admin Management Features
+
+### User Management (CRUD)
+
+Comprehensive user account management system for INTIMA administrators.
+
+**Features:**
+
+- ✅ **Create Users** - Add new students and INTIMA admins with customizable roles
+- ✅ **Read Users** - View all users with searchable table and role filtering
+- ✅ **Update Users** - Edit user details including:
+  - Student ID (fully editable)
+  - Name, Email, and Password
+  - Role assignment (Student/INTIMA Admin)
+  - Affiliate associations (multi-select dropdown)
+- ✅ **Delete Users** - Remove users with confirmation dialog
+- ✅ **Advanced Search** - Search by name, email, or student ID
+- ✅ **Role Filtering** - Filter between Student and INTIMA Admin roles
+- ✅ **Pagination** - 10 items per page with navigation controls
+- ✅ **Modal Forms** - Clean create/edit modals with validation
+- ✅ **Status Indicators** - Color-coded role badges
+- ✅ **Password Security** - bcrypt hashing, optional password updates
+
+**Affiliates Integration:**
+
+- Multi-select dropdown for affiliate associations
+- Real-time search filtering within dropdown
+- Selected affiliates displayed as removable badges
+- Pre-filled affiliates when editing users
+- Stored as JSON array for flexible association
+
+**API Endpoints:**
+
+- `GET /api/users` - Fetch all users
+- `GET /api/users/:id` - Fetch single user
+- `POST /api/users` - Create new user
+- `PUT /api/users/:id` - Update user (with ID change support)
+- `DELETE /api/users/:id` - Delete user
+
+**UI/UX Enhancements:**
+
+- Modal close button (X) and outside-click to close
+- Real-time alerts (toast notifications)
+- Form validation with error messages
+- Loading states during operations
+- Responsive table design
+
 ---
 
-## 👨‍💻 Developer Notes
+### Affiliate Management (CRUD)
 
-- All timestamps stored in UTC
+Complete management system for student organizations and clubs.
+
+**Features:**
+
+- ✅ **Create Affiliates** - Add new student organizations with full details
+- ✅ **Read Affiliates** - View all affiliates in comprehensive table
+- ✅ **Update Affiliates** - Modify affiliate information:
+  - Name and description
+  - Category assignment
+  - Status management
+  - Member count tracking
+  - Advisor assignment
+  - Committee member management
+- ✅ **Delete Affiliates** - Remove affiliates with confirmation
+- ✅ **Search & Filter** - Multi-filter capability:
+  - Search by name, description, or advisor ID
+  - Filter by category (Sports, Academic, Special Interest, Service)
+  - Filter by status (Active, Inactive, Pending Approval)
+- ✅ **Pagination** - 10 items per page with controls
+- ✅ **Color-Coded Badges** - Visual indicators for:
+  - Categories (Blue for Sports, Purple for Academic, Pink for Special Interest, Green for Service)
+  - Status (Green for Active, Gray for Inactive, Yellow for Pending Approval)
+- ✅ **Committee Management** - Comma-separated student ID entry for committee members
+
+**Modal Features:**
+
+- Create/Edit modals with all affiliate details
+- Optional description and committee members
+- Member count tracking
+- Modal close button and outside-click close
+- Form validation
+
+**API Endpoints:**
+
+- `GET /api/affiliates` - Fetch all affiliates
+- `GET /api/affiliates/:id` - Fetch single affiliate
+- `POST /api/affiliates` - Create new affiliate
+- `PUT /api/affiliates/:id` - Update affiliate
+- `DELETE /api/affiliates/:id` - Delete affiliate
+
+**Data Fields:**
+
+- Name (required, max 255 chars)
+- Description (optional text)
+- Category (required enum)
+- Status (required enum)
+- Member Count (integer, defaults to 0)
+- Advisor ID (required, references users)
+- Committee Members (JSON array of student IDs)
+- Timestamps (createdAt, updatedAt in UTC+8)
+
+---
+
+## � Admin Dashboard
+
+Comprehensive dashboard for INTIMA administrators to monitor submission activities.
+
+**Metrics Cards:**
+
+- Total Submissions count
+- Pending Validation submissions
+- Awaiting INTIMA Review submissions
+- Requires Amendment submissions
+- Approved submissions
+- Rejected submissions
+
+**Analytics:**
+
+- **Submission Trends Chart** - Line chart showing submission volume and approval rates over time
+- **Status Distribution** - Donut chart showing breakdown of submissions by status
+- **Color-Coded Indicators** - Visual status indicators (Green for Approved, Orange for Amendment needed, Blue for Review, Yellow for Pending, Red for Rejected)
+
+**Submission Table:**
+
+- Advanced search by affiliate name or activity name
+- Status-based filtering
+- Sortable and paginated table (10 items per page)
+- Quick action buttons to view submission details
+- Hover effects for better interactivity
+
+---
+
+## 🗂 Admin Navigation
+
+INTIMA administrators have access to the following navigation tabs:
+
+1. **Dashboard** - Overview with metrics and analytics
+2. **Users** - User management (CRUD) with affiliate associations
+3. **Affiliates** - Affiliate/organization management
+4. **Submissions** - Detailed view of all submissions with review capabilities
+
+---
+
+---
+
+## �👨‍💻 Developer Notes
+
+- All timestamps stored in UTC+8 (Singapore timezone) for consistency
 - File paths stored as relative paths (`/uploads/filename.pdf`)
 - UUIDs used for all primary keys
-- JSON columns used for flexible array storage
+- JSON columns used for flexible array storage (users.affiliates, affiliates.committeeMembers)
 - Drizzle ORM handles migrations automatically
 - TypeScript strict mode enabled
 - All components use React Hooks
+- Modal patterns consistent across all CRUD pages
+- Affiliate IDs stored as UUID strings for efficient querying
 
 ---
 
@@ -837,4 +989,4 @@ When adding new features:
 ---
 
 **Last Updated**: October 19, 2025
-**Version**: 2.0 - Amendment Workflow & UI/UX Enhancements
+**Version**: 3.0 - Admin Management System (Users & Affiliates CRUD, Enhanced Dashboard)

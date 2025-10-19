@@ -6,7 +6,7 @@ interface SidebarProps {
     handleLogout: () => void;
     isMobileMenuOpen: boolean;
     setIsMobileMenuOpen: (isOpen: boolean) => void;
-    setCurrentView: (view: 'login' | 'dashboard' | 'submission' | 'tracker') => void;
+    setCurrentView: (view: 'login' | 'dashboard' | 'submission' | 'tracker' | 'users' | 'affiliates') => void;
     currentView: string;
 }
 
@@ -26,6 +26,24 @@ export default function Sidebar({ currentUser, handleLogout, isMobileMenuOpen, s
                                         }`}
                                 >
                                     Dashboard
+                                </button>
+                                <button
+                                    onClick={() => setCurrentView('users')}
+                                    className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${currentView === 'users'
+                                        ? 'border-red-500 text-red-600'
+                                        : 'border-transparent text-gray-500 hover:text-gray-700'
+                                        }`}
+                                >
+                                    Users
+                                </button>
+                                <button
+                                    onClick={() => setCurrentView('affiliates')}
+                                    className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${currentView === 'affiliates'
+                                        ? 'border-red-500 text-red-600'
+                                        : 'border-transparent text-gray-500 hover:text-gray-700'
+                                        }`}
+                                >
+                                    Affiliates
                                 </button>
                                 <button
                                     onClick={() => setCurrentView('submission')}

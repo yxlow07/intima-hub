@@ -170,7 +170,7 @@ export default function SubmissionDetail({ submission, currentUser }: Submission
             setStatusMessage('');
             setSignedFormFile(null);
             // Force a re-render to show updated files
-            alert('Status updated successfully! The signed form has been added to your documents.');
+            alert('Status updated successfully!');
         } catch (error) {
             console.error('Error updating status:', error);
             alert(`Failed to update status: ${(error as Error).message}`);
@@ -291,23 +291,22 @@ export default function SubmissionDetail({ submission, currentUser }: Submission
                 <div className="mb-8">
                     <p className="text-xs font-medium text-gray-500 uppercase mb-4">Attached Documents</p>
 
-                    {/* Document Tabs */}
-                    <div className="flex gap-2 mb-4 flex-wrap">
-                        {submission.documents.map((doc, idx) => (
-                            <button
-                                key={idx}
-                                onClick={() => {
-                                    setSelectedPdf(doc);
-                                }}
-                                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${selectedPdf === doc
-                                    ? 'bg-gray-600 text-white'
-                                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                                    }`}
+                    {/* Document Selector Dropdown */}
+                    {submission.documents.length > 1 && (
+                        <div className="mb-4">
+                            <select
+                                value={selectedPdf || ''}
+                                onChange={(e) => setSelectedPdf(e.target.value || null)}
+                                className="w-full p-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
                             >
-                                📄 {doc.split('/').pop()}
-                            </button>
-                        ))}
-                    </div>
+                                {submission.documents.filter((doc: any) => doc).map((doc: string) => (
+                                    <option key={doc} value={doc}>
+                                        {doc?.split('/').pop() || 'Unknown'}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
 
                     {/* PDF Viewer */}
                     {selectedPdf && (
@@ -654,7 +653,7 @@ export default function SubmissionDetail({ submission, currentUser }: Submission
                             <p className="text-sm text-gray-700">{submission.feedback}</p>
                         ) : Array.isArray(submission.feedback) ? (
                             <div className="space-y-4">
-                                {submission.feedback.map((comment: any, idx: number) => (
+                                {[...submission.feedback].reverse().map((comment: any, idx: number) => (
                                     <div key={idx} className="border-l-2 border-gray-300 pl-4">
                                         <p className="text-sm font-medium text-gray-900">{comment.author || 'Anonymous'}</p>
                                         <p className="text-xs text-gray-500 mt-1">{new Date(comment.timestamp).toLocaleString()}</p>

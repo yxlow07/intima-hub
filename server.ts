@@ -13,6 +13,19 @@ import bcrypt from 'bcrypt';
 const app = express();
 const port = 3001;
 
+// Utility function to get current UTC+8 timestamp (Singapore timezone)
+const getUTC8Date = (): Date => {
+  const now = new Date();
+  // Create a UTC+8 date by adjusting for the timezone offset
+  const utc8 = new Date(now.getTime() + (8 * 60 * 60 * 1000) - (now.getTimezoneOffset() * 60 * 1000));
+  return utc8;
+};
+
+// Utility function to get current UTC+8 ISO string
+const getUTC8Timestamp = (): string => {
+  return getUTC8Date().toISOString();
+};
+
 // Create uploads directory if it doesn't exist
 const uploadsDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) {
@@ -25,10 +38,8 @@ const storage = multer.diskStorage({
     cb(null, uploadsDir);
   },
   filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname);
-    const name = path.basename(file.originalname, ext);
-    cb(null, name + '-' + uniqueSuffix + ext);
+    // Don't set filename here, will be handled in the endpoint
+    cb(null, file.originalname);
   },
 });
 
@@ -88,12 +99,55 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
       return res.status(400).json({ message: 'No file uploaded' });
     }
 
-    const filePath = `/uploads/${req.file.filename}`;
+    const submissionType = req.body.submissionType || req.body.type || 'UNKNOWN';
+    const activityName = req.body.activityName || 'Activity';
+    const date = req.body.date || '';
+    const isAmendment = req.body.isAmendment === 'true' || req.body.isAmendment === true;
+
+    // Generate filename
+    const ext = path.extname(req.file.originalname);
+    let newFilename: string;
+
+    if (isAmendment) {
+      // For amendments: amended_UUID.pdf
+      const uuid = require('crypto').randomUUID();
+      newFilename = `amended_${uuid}${ext}`;
+    } else {
+      // For regular uploads: SAP/ASF_Activity_Name_UUID.pdf (removed date and timestamp)
+      const sanitizedActivityName = activityName.replace(/[^a-zA-Z0-9\s-]/g, '').trim().replace(/\s+/g, '_');
+      const uuid = require('crypto').randomUUID();
+      newFilename = `${submissionType}_${sanitizedActivityName}_${uuid}${ext}`;
+    }
+
+    // Remove temp file uploaded by multer
+    const tempPath = req.file.path;
+    
+    // Check if file with similar name exists and generate new name if needed
+    let finalPath = path.join(uploadsDir, newFilename);
+    let counter = 1;
+    while (fs.existsSync(finalPath)) {
+      if (isAmendment) {
+        // For amendments: amended_v1, amended_v2, etc.
+        const nameParts = newFilename.split(ext);
+        newFilename = `amended_v${counter}${ext}`;
+      } else {
+        const nameParts = newFilename.split(ext);
+        newFilename = `${nameParts[0]}_v${counter}${ext}`;
+      }
+      finalPath = path.join(uploadsDir, newFilename);
+      counter++;
+    }
+
+    // Rename the uploaded file
+    fs.renameSync(tempPath, finalPath);
+
+    const filePath = `/uploads/${newFilename}`;
     res.json({
       message: 'File uploaded successfully',
-      filename: req.file.filename,
+      filename: newFilename,
       originalName: req.file.originalname,
       size: req.file.size,
+      filePath: filePath,
       path: filePath,
       url: `${req.protocol}://${req.get('host')}${filePath}`,
     });
@@ -124,6 +178,7 @@ app.get('/api/submissions', async (req, res) => {
       documents: (row.sap as any).files || [],
       submittedBy: row.sap.submittedBy,
       submittedAt: row.sap.submittedAt,
+      updatedAt: row.sap.updatedAt,
       feedback: row.sap.comments,
       financeReviewStatus: (row.sap as any).financeReviewStatus,
       financeComments: (row.sap as any).financeComments,
@@ -153,6 +208,7 @@ app.get('/api/submissions', async (req, res) => {
       documents: (row.asf as any).files || [],
       submittedBy: row.asf.submittedBy,
       submittedAt: row.asf.submittedAt,
+      updatedAt: row.asf.updatedAt,
       feedback: row.asf.comments,
       financeReviewStatus: (row.asf as any).financeReviewStatus,
       financeComments: (row.asf as any).financeComments,
@@ -215,6 +271,7 @@ app.get('/api/submissions/user/:userId', async (req, res) => {
       documents: (row.sap as any).files || [],
       submittedBy: row.sap.submittedBy,
       submittedAt: row.sap.submittedAt,
+      updatedAt: row.sap.updatedAt,
       feedback: row.sap.comments,
       financeReviewStatus: (row.sap as any).financeReviewStatus,
       financeComments: (row.sap as any).financeComments,
@@ -244,6 +301,7 @@ app.get('/api/submissions/user/:userId', async (req, res) => {
       documents: (row.asf as any).files || [],
       submittedBy: row.asf.submittedBy,
       submittedAt: row.asf.submittedAt,
+      updatedAt: row.asf.updatedAt,
       feedback: row.asf.comments,
       financeReviewStatus: (row.asf as any).financeReviewStatus,
       financeComments: (row.asf as any).financeComments,
@@ -461,7 +519,7 @@ app.post('/api/submission/:id/comment', async (req, res) => {
       author: userName,
       authorId: userId,
       text: text,
-      timestamp: new Date().toISOString(),
+      timestamp: getUTC8Timestamp(),
     };
 
     const table = formType === 'SAP' ? sap : asf;
@@ -529,6 +587,99 @@ app.delete('/api/submission/:id/comment', async (req, res) => {
   } catch (error) {
     console.error('Error deleting comment:', error);
     res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// Submit amendment endpoint
+app.patch('/api/submission/:id/status', async (req, res) => {
+  const { id } = req.params;
+  const { formType, status, userId, newDocument, amendmentComment } = req.body;
+
+  if (!status || !userId) {
+    return res.status(400).json({ message: 'Status and userId are required' });
+  }
+
+  try {
+    // Determine which table to use
+    const table = formType === 'SAP' ? sap : asf;
+
+    // Get the submission
+    const submission = await db
+      .select()
+      .from(table)
+      .where(eq(table.id, id as any))
+      .limit(1)
+      .then(rows => rows[0]);
+
+    if (!submission) {
+      return res.status(404).json({ message: 'Submission not found' });
+    }
+
+    // Parse existing files array
+    let files: string[] = [];
+    if ((submission as any).files) {
+      try {
+        files = Array.isArray((submission as any).files) 
+          ? (submission as any).files 
+          : typeof (submission as any).files === 'string'
+            ? JSON.parse((submission as any).files)
+            : (submission as any).files;
+      } catch (e) {
+        console.error('Error parsing files:', e);
+        files = [];
+      }
+    }
+
+    // Add new document if provided
+    if (newDocument) {
+      files.push(newDocument);
+    }
+
+    // Parse existing comments
+    let comments: any[] = [];
+    if ((submission as any).comments) {
+      try {
+        comments = Array.isArray((submission as any).comments) 
+          ? (submission as any).comments 
+          : typeof (submission as any).comments === 'string'
+            ? JSON.parse((submission as any).comments)
+            : (submission as any).comments;
+      } catch (e) {
+        console.error('Error parsing comments:', e);
+        comments = [];
+      }
+    }
+
+    // Add amendment comment
+    if (amendmentComment) {
+      const newComment = {
+        author: 'System',
+        timestamp: getUTC8Timestamp(),
+        text: amendmentComment,
+        authorId: userId,
+      };
+      comments.push(newComment);
+    }
+
+    // Update submission with new status and documents
+    const result = await db
+      .update(table)
+      .set({
+        status: status as any,
+        files: JSON.stringify(files) as any,
+        comments: JSON.stringify(comments) as any,
+        updatedAt: getUTC8Date(),
+      })
+      .where(eq(table.id, id as any))
+      .returning();
+
+    res.json({ 
+      message: 'Amendment submitted successfully',
+      submission: result[0] || null,
+    });
+  } catch (error) {
+    console.error('Error submitting amendment:', error);
+    res.status(500).json({ message: 'Internal server error', error: (error as any).message });
   }
 });
 
@@ -673,7 +824,7 @@ app.put('/api/submissions/:id/status', async (req, res) => {
     // Add new comment with signed form reference
     const newComment = {
       author: 'INTIMA Review',
-      timestamp: new Date().toISOString(),
+      timestamp: getUTC8Timestamp(),
       text: `Status updated to "${status}": ${message}`,
       authorId: 'system',
       signedFormUrl: signedFormUrl || null,
@@ -688,7 +839,7 @@ app.put('/api/submissions/:id/status', async (req, res) => {
         status: status as any,
         comments: comments as any,
         files: files as any,
-        updatedAt: new Date(),
+        updatedAt: getUTC8Date(),
       })
       .where(eq(table.id, id as any))
       .returning();
@@ -741,7 +892,7 @@ app.put('/api/submissions/:id/department-review', async (req, res) => {
     if (financeReviewStatus) {
       updateData.financeReviewStatus = financeReviewStatus;
       updateData.financeReviewedBy = userId || 'Unknown';
-      updateData.financeReviewedAt = new Date();
+      updateData.financeReviewedAt = getUTC8Date();
       
       // Add finance review to comments
       const financeComment = {
@@ -760,7 +911,7 @@ app.put('/api/submissions/:id/department-review', async (req, res) => {
         financeComments.push({
           id: Math.random().toString(36).substring(7),
           text: financeReviewMessage,
-          timestamp: new Date().toISOString(),
+          timestamp: getUTC8Timestamp(),
         });
       }
       updateData.financeComments = financeComments;
@@ -770,7 +921,7 @@ app.put('/api/submissions/:id/department-review', async (req, res) => {
     if (activitiesReviewStatus) {
       updateData.activitiesReviewStatus = activitiesReviewStatus;
       updateData.activitiesReviewedBy = userId || 'Unknown';
-      updateData.activitiesReviewedAt = new Date();
+      updateData.activitiesReviewedAt = getUTC8Date();
       
       // Add activities review to comments
       const activitiesComment = {
@@ -778,7 +929,7 @@ app.put('/api/submissions/:id/department-review', async (req, res) => {
         author: 'Activities Department',
         authorId: userId || 'system',
         text: `Status: ${activitiesReviewStatus}, Reason: ${activitiesReviewMessage || 'No reason provided'}`,
-        timestamp: new Date().toISOString(),
+        timestamp: getUTC8Timestamp(),
         department: 'Activities',
       };
       comments.push(activitiesComment);
@@ -789,7 +940,7 @@ app.put('/api/submissions/:id/department-review', async (req, res) => {
         activitiesComments.push({
           id: Math.random().toString(36).substring(7),
           text: activitiesReviewMessage,
-          timestamp: new Date().toISOString(),
+          timestamp: getUTC8Timestamp(),
         });
       }
       updateData.activitiesComments = activitiesComments;
@@ -802,7 +953,7 @@ app.put('/api/submissions/:id/department-review', async (req, res) => {
     // Update comments and set status to "Awaiting INTIMA Review"
     updateData.comments = comments;
     updateData.status = 'Awaiting INTIMA Review';
-    updateData.updatedAt = new Date();
+    updateData.updatedAt = getUTC8Date();
 
     // Update the submission
     const result = await db

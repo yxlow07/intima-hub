@@ -94,6 +94,7 @@ export interface Submission {
     feedback?: string | any[];
     submittedBy: string;
     submittedAt: string;
+    updatedAt: string;
     financeReviewStatus?: 'Pending' | 'Approved' | 'Rejected' | 'Not Required';
     financeComments?: any[];
     financeReviewedBy?: string;

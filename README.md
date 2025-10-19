@@ -13,9 +13,18 @@ INTIMA Hub is a full-stack application designed to streamline the submission and
 - **Multi-Department Reviews**: Finance and Activities department review workflows
 - **PDF Document Management**: Upload and store multiple PDF files per submission
 - **Status Tracking**: Comprehensive status workflow (Pending Validation → Awaiting INTIMA Review → Approved/Rejected/Requires Amendment)
+- **Amendment Workflow**: Students can submit amended documents when requesting amendments with drag-and-drop interface
 - **Real-Time Updates**: UI automatically refreshes with latest submission details
 - **Digitally Signed Forms**: Support for uploading digitally signed approval/rejection forms
 - **Advanced Analytics**: Dashboard with charts showing submission statistics
+- **Sorted Submissions**: Submissions sorted by most recently updated first
+- **UTC+8 Timezone**: Consistent timestamp handling across all operations
+- **Enhanced UI/UX**:
+  - Dedicated submission detail page with full-width PDF viewer
+  - Drag-and-drop file uploads with visual feedback
+  - Responsive dropdown for document selection
+  - Newest comments displayed first
+  - System messages protected from deletion
 
 ---
 
@@ -29,6 +38,8 @@ INTIMA Hub is a full-stack application designed to streamline the submission and
 6. [Installation & Setup](#installation--setup)
 7. [Running the Application](#running-the-application)
 8. [Key Features Deep Dive](#key-features-deep-dive)
+9. [Amendment Workflow](#amendment-workflow)
+10. [File Naming Convention](#file-naming-convention)
 
 ---
 
@@ -248,18 +259,28 @@ Awaiting INTIMA Review (Auto-triggered when Finance OR Activities department rev
   - Body: `{ affiliateId, activityName, date, description, files[] }`
 
 - **POST** `/api/submissions/asf`
+
   - Create new ASF submission
   - Body: Same as SAP
 
-### Status Management
+- **POST** `/api/submission/:id/comment`
 
-- **PUT** `/api/submissions/:id/status`
-  - Update submission status (INTIMA admin only)
-  - Body: `{ status, message, signedFormUrl }`
+  - Add comment to submission feedback
+  - Body: `{ formType, text, userId, userName }`
+
+- **DELETE** `/api/submission/:id/comment`
+
+  - Delete comment by index
+  - Body: `{ formType, commentIndex, userId }`
+
+- **PATCH** `/api/submission/:id/status`
+  - Submit amendment for "Requires Amendment" status
+  - Body: `{ formType, status, userId, newDocument, amendmentComment }`
   - Features:
-    - Automatically appends signed form to files array
-    - Updates comments with status change
-    - Returns updated submission with all fields
+    - Uploads amended PDF document
+    - Stores amendment comment with [AMENDMENT] prefix
+    - Auto-transitions status to "Awaiting INTIMA Review"
+    - Saves all changes to database
 
 ### Department Reviews
 
@@ -488,6 +509,26 @@ npm run lint
 - Stored with relative path format for consistency
 - Available for download in documents section
 
+### 8. Amendment Workflow
+
+- When status is "Requires Amendment", a dedicated amendment section appears
+- Features:
+  - **Drag-and-Drop Interface**: Same professional styling as submission form
+  - **PDF-Only Uploads**: Ensures document consistency
+  - **Amendment Comments**: Required field to describe changes
+  - **Auto-Status Update**: Automatically transitions to "Awaiting INTIMA Review"
+  - **System Messages**: Amendment comments prefixed with [AMENDMENT] tag
+  - **Protected Comments**: System messages cannot be deleted by users
+- Amendment documents named as: `amended_v1.pdf`, `amended_v2.pdf`, etc.
+- All amendments tracked in submission history with timestamps
+
+### 9. Enhanced Comment System
+
+- **Newest First Display**: Comments sorted with newest at top
+- **System Message Protection**: Users cannot delete system-generated messages
+- **Comment Tracking**: Each comment includes author, timestamp, and content
+- **Amendment History**: Full trace of all amendments and feedback in comments
+
 ---
 
 ## 🔐 Security Features
@@ -623,9 +664,149 @@ This ensures the UI always displays the most current data without requiring manu
 
 ---
 
-## 📄 License
+## � Amendment Workflow
 
-ISC License
+When a submission receives "Requires Amendment" status:
+
+### Student Side:
+
+```
+View Submission Details
+    ↓
+See "Requires Amendment" status
+    ↓
+Amendment Section Appears with:
+    - Drag-and-drop file upload
+    - Amendment notes textarea
+    - Submit button
+    ↓
+Upload amended PDF
+    ↓
+Add description of changes
+    ↓
+Click "Submit Amendment & Move to Review"
+    ↓
+File uploaded as amended_v1.pdf
+Comment saved with [AMENDMENT] prefix
+Status auto-changed to "Awaiting INTIMA Review"
+    ↓
+Wait for next review round
+```
+
+### Admin Side:
+
+```
+Review Dashboard
+    ↓
+Click on submission with "Requires Amendment"
+    ↓
+Send amendment request with comments
+    ↓
+Student submits amended version
+    ↓
+View updated documents list with amended_v1.pdf
+    ↓
+See [AMENDMENT] comment in history
+    ↓
+Status now "Awaiting INTIMA Review"
+    ↓
+Review amended document and make final decision
+```
+
+### Key Points:
+
+- **Amendment Counter**: Each amendment increments (v1, v2, v3, etc.)
+- **Version Tracking**: All versions kept for audit trail
+- **Immutable History**: Amendment comments marked as [AMENDMENT] and cannot be deleted
+- **Single Document**: Only one amendment file per submission (previous overwritten)
+- **One-Click Transition**: Automatically moves to "Awaiting INTIMA Review" status
+
+---
+
+## 📁 File Naming Convention
+
+### Regular Submission Files
+
+Format: `{TYPE}_{ActivityName}_{UUID}.pdf`
+
+Examples:
+
+- `SAP_Fall_Carnival_550e8400-e29b-41d4-a716-446655440000.pdf`
+- `ASF_Community_Service_3fa85f64-5717-4562-b3fc-2c963f66afa6.pdf`
+
+**Components:**
+
+- `{TYPE}`: SAP or ASF (submission form type)
+- `{ActivityName}`: Activity name with underscores for spaces
+- `{UUID}`: Unique identifier to prevent collisions
+
+### Amendment Files
+
+Format: `amended_v{N}.pdf`
+
+Examples:
+
+- `amended_v1.pdf` (first amendment)
+- `amended_v2.pdf` (second amendment)
+- `amended_v3.pdf` (third amendment)
+
+**Features:**
+
+- Simple versioning for easy identification
+- Doesn't include timestamp (cleaner naming)
+- Uses UUID internally for uniqueness
+- Easy to track amendment history at a glance
+
+### File Storage
+
+- **Location**: `/uploads/` directory
+- **Paths Stored**: Database stores relative paths (e.g., `/uploads/amended_v1.pdf`)
+- **Conflict Resolution**: Auto-increments version if file exists
+- **Cleanup**: Old files kept for audit trail, not deleted on amendment
+
+---
+
+## 🌍 Timezone Handling
+
+All timestamps throughout the application use **UTC+8** (Singapore/Malaysia timezone):
+
+- **Function**: `getUTC8Date()` for database timestamps
+- **Function**: `getUTC8Timestamp()` for ISO string timestamps
+- **Consistency**: Applied to all timestamp operations:
+  - Submission creation
+  - Status updates
+  - Comments and feedback
+  - Department reviews
+  - Amendment submissions
+- **Display**: Formatted for user readability (e.g., "Oct 20, 2025, 02:30 PM")
+
+---
+
+## 📱 UI/UX Improvements
+
+### SubmissionView Page
+
+- **Full-Width PDF Viewer**: 50vh height for better readability
+- **Dropdown Document Selection**: Clean interface for multiple documents
+- **Organized Layout**: Stacked sections for better mobile responsiveness
+- **Drag-and-Drop Amendments**: Professional file upload experience
+- **Comment Sorting**: Newest comments displayed first
+- **Protected System Messages**: [AMENDMENT] tags cannot be deleted
+
+### Tracker Page
+
+- **Compact Submission List**: Removed download buttons for cleaner UI
+- **Sorting**: Submissions ordered by recently updated
+- **Quick Navigation**: Direct link to submission detail page
+
+### SubmissionDetail Page
+
+- **Dropdown Document Selection**: Replaced button tabs with cleaner dropdown
+- **Consistent Styling**: Matches SubmissionView layout
+- **Reversed Comment Order**: Newest comments first
+- **Better Organization**: Clearer section hierarchy
+
+---
 
 ---
 
@@ -656,3 +837,4 @@ When adding new features:
 ---
 
 **Last Updated**: October 19, 2025
+**Version**: 2.0 - Amendment Workflow & UI/UX Enhancements

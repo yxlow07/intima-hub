@@ -5,15 +5,24 @@ import Dashboard from './pages/Dashboard';
 import SubmissionPage from './pages/Submission';
 import Tracker from './pages/Tracker';
 import SubmissionDetail from './pages/SubmissionDetail';
+import SubmissionView from './pages/SubmissionView';
 import Header from './components/Header';
 import Sidebar from './components/Sidebar';
 import API_URL from './config';
 
+// Utility function to get current UTC+8 timestamp
+const getUTC8Timestamp = (): string => {
+    const now = new Date();
+    const utc8 = new Date(now.getTime() + (8 * 60 * 60 * 1000) - (now.getTimezoneOffset() * 60 * 1000));
+    return utc8.toISOString();
+};
+
 export default function INTIMAHub() {
-    const [currentView, setCurrentView] = useState<'login' | 'dashboard' | 'submission' | 'tracker' | 'submission-detail'>('login');
+    const [currentView, setCurrentView] = useState<'login' | 'dashboard' | 'submission' | 'tracker' | 'submission-detail' | 'submission-view'>('login');
     const [currentUser, setCurrentUser] = useState<User | null>(null);
     const [submissions, setSubmissions] = useState<Submission[]>([]);
     const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null);
+    const [selectedSubmissionViewId, setSelectedSubmissionViewId] = useState<string | null>(null);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [affiliates, setAffiliates] = useState<Affiliate[]>([]);
     const [formData, setFormData] = useState({
@@ -24,9 +33,15 @@ export default function INTIMAHub() {
         description: ''
     });
     const [validationErrors, setValidationErrors] = useState<string[]>([]);
-    const [uploadedFiles, setUploadedFiles] = useState<string[]>([]);
+    const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState<string>('all');
+    const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+    // Clear alert when navigating to a different view
+    useEffect(() => {
+        setAlert(null);
+    }, [currentView]);
 
     useEffect(() => {
         const loggedInUser = localStorage.getItem('user');
@@ -91,96 +106,122 @@ export default function INTIMAHub() {
         if (!formData.affiliateId) errors.push('Please select an affiliate');
         if (!formData.activityName) errors.push('Activity name is required');
         if (!formData.date) errors.push('Activity date is required');
-        if (uploadedFiles.length === 0) errors.push('At least one document must be uploaded');
+        if (selectedFiles.length === 0) errors.push('At least one document must be uploaded');
         setValidationErrors(errors);
         return errors.length === 0;
     };
 
-    const handleSubmit = () => {
+    const handleSubmit = async () => {
         if (validateForm()) {
-            const endpoint = `${API_URL}/api/submission/${formData.type.toLowerCase()}`;
+            try {
+                // Step 1: Upload all selected files
+                const uploadedFilePaths: string[] = [];
 
-            const submissionData = {
-                affiliateId: formData.affiliateId,
-                activityName: formData.activityName,
-                date: formData.date,
-                description: formData.description,
-                fileUrl: uploadedFiles[0] || null, // Store first uploaded file URL
-                submittedBy: currentUser?.id || 'Unknown',
-            };
+                for (const file of selectedFiles) {
+                    const uploadFormData = new FormData();
+                    uploadFormData.append('file', file);
+                    uploadFormData.append('submissionType', formData.type);
+                    uploadFormData.append('activityName', formData.activityName);
+                    uploadFormData.append('date', formData.date);
 
-            fetch(endpoint, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(submissionData),
-            })
-                .then(res => {
-                    if (!res.ok) throw new Error('Failed to submit');
-                    return res.json();
-                })
-                .then(data => {
-                    // Find affiliate name for display
-                    const affiliate = affiliates.find(a => a.id === formData.affiliateId);
-
-                    const newSubmission: Submission = {
-                        id: data.id,
-                        type: formData.type,
-                        affiliateName: affiliate?.name || 'Unknown Affiliate',
-                        activityName: formData.activityName,
-                        date: formData.date,
-                        status: 'Pending Validation',
-                        documents: uploadedFiles,
-                        submittedBy: currentUser?.name || 'Unknown',
-                        submittedAt: new Date().toISOString(),
-                    };
-                    setSubmissions([newSubmission, ...submissions]);
-
-                    // Reset form
-                    setFormData({
-                        type: 'SAP',
-                        affiliateId: '',
-                        activityName: '',
-                        date: '',
-                        description: ''
+                    const uploadResponse = await fetch(`${API_URL}/api/upload`, {
+                        method: 'POST',
+                        body: uploadFormData,
                     });
-                    setUploadedFiles([]);
-                    setValidationErrors([]);
-                    setCurrentView('tracker');
-                })
-                .catch(err => {
-                    console.error('Error submitting form:', err);
-                    setValidationErrors(['Failed to submit form. Please try again.']);
+
+                    if (!uploadResponse.ok) {
+                        throw new Error(`Failed to upload ${file.name}`);
+                    }
+
+                    const uploadData = await uploadResponse.json();
+                    uploadedFilePaths.push(uploadData.path);
+                }
+
+                // Step 2: Submit form with uploaded file paths
+                const endpoint = `${API_URL}/api/submission/${formData.type.toLowerCase()}`;
+
+                const submissionData = {
+                    affiliateId: formData.affiliateId,
+                    activityName: formData.activityName,
+                    date: formData.date,
+                    description: formData.description,
+                    files: uploadedFilePaths,
+                    submittedBy: currentUser?.id || 'Unknown',
+                };
+
+                const submitResponse = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(submissionData),
                 });
+
+                if (!submitResponse.ok) {
+                    throw new Error('Failed to submit');
+                }
+
+                const data = await submitResponse.json();
+
+                // Find affiliate name for display
+                const affiliate = affiliates.find(a => a.id === formData.affiliateId);
+
+                const newSubmission: Submission = {
+                    id: data.id,
+                    type: formData.type,
+                    affiliateName: affiliate?.name || 'Unknown Affiliate',
+                    activityName: formData.activityName,
+                    date: formData.date,
+                    status: 'Pending Validation',
+                    documents: uploadedFilePaths,
+                    submittedBy: currentUser?.name || 'Unknown',
+                    submittedAt: getUTC8Timestamp(),
+                    updatedAt: getUTC8Timestamp(),
+                };
+                setSubmissions([newSubmission, ...submissions]);
+
+                // Reset form
+                setFormData({
+                    type: 'SAP',
+                    affiliateId: '',
+                    activityName: '',
+                    date: '',
+                    description: ''
+                });
+                setSelectedFiles([]);
+                setValidationErrors([]);
+
+                // Show success alert and redirect
+                setAlert({
+                    type: 'success',
+                    message: `Your ${formData.type} submission has been successfully submitted!`
+                });
+                setCurrentView('tracker');
+            } catch (err) {
+                console.error('Error submitting form:', err);
+                const errorMessage = err instanceof Error ? err.message : 'Failed to submit form. Please try again.';
+                setAlert({
+                    type: 'error',
+                    message: errorMessage
+                });
+                setValidationErrors([errorMessage]);
+            }
         }
     };
 
-    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;
         if (files) {
             const fileArray = Array.from(files);
-            for (const file of fileArray) {
-                const formData = new FormData();
-                formData.append('file', file);
+            // Filter for PDF files only
+            const pdfFiles = fileArray.filter(file => file.type === 'application/pdf');
 
-                try {
-                    const response = await fetch(`${API_URL}/api/upload`, {
-                        method: 'POST',
-                        body: formData,
-                    });
-
-                    if (!response.ok) {
-                        throw new Error('File upload failed');
-                    }
-
-                    const data = await response.json();
-                    setUploadedFiles([...uploadedFiles, data.path]);
-                } catch (error) {
-                    console.error('Error uploading file:', error);
-                    setValidationErrors([...validationErrors, `Failed to upload ${file.name}`]);
-                }
+            if (pdfFiles.length !== fileArray.length) {
+                setValidationErrors([...validationErrors, 'Only PDF files are allowed']);
             }
+
+            // Store the file objects locally (don't upload yet)
+            setSelectedFiles([...selectedFiles, ...pdfFiles]);
         }
     };
 
@@ -192,6 +233,23 @@ export default function INTIMAHub() {
         <div className="min-h-screen bg-gray-50">
             <Header currentUser={currentUser} handleLogout={handleLogout} isMobileMenuOpen={isMobileMenuOpen} setIsMobileMenuOpen={setIsMobileMenuOpen} />
             <Sidebar currentUser={currentUser} handleLogout={handleLogout} isMobileMenuOpen={isMobileMenuOpen} setIsMobileMenuOpen={setIsMobileMenuOpen} setCurrentView={setCurrentView} currentView={currentView} />
+
+            {alert && (
+                <div className={`fixed top-4 right-4 px-6 py-4 rounded-lg shadow-lg z-50 max-w-md ${alert.type === 'success'
+                    ? 'bg-green-100 border border-green-400 text-green-800'
+                    : 'bg-red-100 border border-red-400 text-red-800'
+                    }`}>
+                    <div className="flex items-center justify-between">
+                        <span className="font-medium">{alert.message}</span>
+                        <button
+                            onClick={() => setAlert(null)}
+                            className="ml-4 text-lg font-bold hover:opacity-70"
+                        >
+                            ×
+                        </button>
+                    </div>
+                </div>
+            )}
 
             <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
                 {currentView === 'dashboard' && currentUser?.role === 'intima' && (
@@ -226,9 +284,9 @@ export default function INTIMAHub() {
                         formData={formData}
                         setFormData={setFormData}
                         validationErrors={validationErrors}
-                        uploadedFiles={uploadedFiles}
+                        uploadedFiles={selectedFiles}
                         handleFileUpload={handleFileUpload}
-                        setUploadedFiles={setUploadedFiles}
+                        setUploadedFiles={setSelectedFiles}
                         handleSubmit={handleSubmit}
                         setCurrentView={setCurrentView}
                         affiliates={affiliates}
@@ -236,7 +294,11 @@ export default function INTIMAHub() {
                 )}
 
                 {currentView === 'tracker' && (
-                    <Tracker currentUser={currentUser} setCurrentView={setCurrentView} />
+                    <Tracker currentUser={currentUser} setCurrentView={setCurrentView} onSelectSubmission={setSelectedSubmissionViewId} />
+                )}
+
+                {currentView === 'submission-view' && selectedSubmissionViewId && (
+                    <SubmissionView submissionId={selectedSubmissionViewId} currentUser={currentUser} setCurrentView={setCurrentView} />
                 )}
             </main>
         </div>

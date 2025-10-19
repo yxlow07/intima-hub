@@ -1,20 +1,18 @@
 import { useState, useEffect } from 'react';
-import { Eye, Download, MessageSquare, CheckCircle, AlertCircle, Clock, XCircle, Loader } from 'lucide-react';
-import { Submission, User, SubmissionDetail } from '../types';
+import { Eye, CheckCircle, AlertCircle, Clock, XCircle } from 'lucide-react';
+import { Submission, User } from '../types';
 import API_URL from '../config';
 
 interface TrackerProps {
     currentUser: User | null;
-    setCurrentView: (view: 'login' | 'dashboard' | 'submission' | 'tracker') => void;
+    setCurrentView: (view: 'login' | 'dashboard' | 'submission' | 'tracker' | 'submission-view') => void;
+    onSelectSubmission: (id: string) => void;
 }
 
-export default function Tracker({ currentUser }: TrackerProps) {
+export default function Tracker({ currentUser, setCurrentView, onSelectSubmission }: TrackerProps) {
     const [submissions, setSubmissions] = useState<Submission[]>([]);
     const [loading, setLoading] = useState(true);
-    const [selectedSubmission, setSelectedSubmission] = useState<SubmissionDetail | null>(null);
-    const [detailLoading, setDetailLoading] = useState(false);
     const [statusFilter, setStatusFilter] = useState<string>('all');
-    const [commentText, setCommentText] = useState('');
 
     useEffect(() => {
         if (currentUser) {
@@ -30,23 +28,6 @@ export default function Tracker({ currentUser }: TrackerProps) {
                 });
         }
     }, [currentUser]);
-
-    // Handle Esc key to close modal
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') {
-                // Refresh submission data from DB before closing
-                if (selectedSubmission) {
-                    refreshSubmissionData(selectedSubmission.id);
-                }
-                setSelectedSubmission(null);
-            }
-        };
-        if (selectedSubmission) {
-            document.addEventListener('keydown', handleKeyDown);
-            return () => document.removeEventListener('keydown', handleKeyDown);
-        }
-    }, [selectedSubmission]);
 
     const getStatusColor = (status: string) => {
         switch (status) {
@@ -85,102 +66,15 @@ export default function Tracker({ currentUser }: TrackerProps) {
     const allStatuses = ['All', 'Pending Validation', 'Awaiting INTIMA Review', 'Requires Amendment', 'Approved', 'Rejected'];
 
     // Filter submissions based on selected status
-    const filteredSubmissions = statusFilter === 'all'
+    const filteredSubmissions = (statusFilter === 'all'
         ? submissions
-        : submissions.filter(s => s.status === statusFilter);
-
-    const handleAddComment = async () => {
-        if (!selectedSubmission || !currentUser || !commentText.trim()) return;
-
-        try {
-            const response = await fetch(`${API_URL}/api/submission/${selectedSubmission.id}/comment`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    formType: selectedSubmission.type,
-                    text: commentText,
-                    userId: currentUser.id,
-                    userName: currentUser.name,
-                }),
-            });
-
-            if (!response.ok) throw new Error('Failed to add comment');
-
-            // Update the feedback/comments in the selected submission
-            const newComment = {
-                author: currentUser.name,
-                authorId: currentUser.id,
-                text: commentText,
-                timestamp: new Date().toISOString(),
-            };
-
-            const updatedFeedback = Array.isArray(selectedSubmission.feedback)
-                ? [...selectedSubmission.feedback, newComment]
-                : [newComment];
-
-            setSelectedSubmission({
-                ...selectedSubmission,
-                feedback: updatedFeedback,
-            });
-
-            setCommentText('');
-        } catch (error) {
-            console.error('Error adding comment:', error);
-        }
-    };
-
-    const handleDeleteComment = async (index: number) => {
-        if (!selectedSubmission || !Array.isArray(selectedSubmission.feedback) || !currentUser) return;
-
-        try {
-            // Update backend with authorization check
-            const response = await fetch(`${API_URL}/api/submission/${selectedSubmission.id}/comment`, {
-                method: 'DELETE',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    formType: selectedSubmission.type,
-                    commentIndex: index,
-                    userId: currentUser.id,
-                }),
-            });
-
-            if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.message || 'Failed to delete comment');
-            }
-
-            // Remove comment from local state
-            const updatedFeedback = selectedSubmission.feedback.filter((_, i) => i !== index);
-
-            // Update local state
-            setSelectedSubmission({
-                ...selectedSubmission,
-                feedback: updatedFeedback,
-            });
-        } catch (error) {
-            console.error('Error deleting comment:', error);
-            alert(`Error: ${error instanceof Error ? error.message : 'Failed to delete comment'}`);
-        }
-    };
-
-    const refreshSubmissionData = async (submissionId: string) => {
-        try {
-            const res = await fetch(`${API_URL}/api/submission/${submissionId}`);
-            if (!res.ok) throw new Error('Failed to fetch');
-            const data = await res.json();
-
-            // Update the submissions list with the refreshed data
-            setSubmissions(submissions.map(s =>
-                s.id === submissionId ? { ...s, feedback: data.feedback } : s
-            ));
-        } catch (error) {
-            console.error('Error refreshing submission data:', error);
-        }
-    };
+        : submissions.filter(s => s.status === statusFilter))
+        .sort((a, b) => {
+            // Sort by updatedAt in descending order (most recent first)
+            const dateA = new Date(a.updatedAt).getTime();
+            const dateB = new Date(b.updatedAt).getTime();
+            return dateB - dateA;
+        });
 
     if (loading) {
         return <div>Loading...</div>;
@@ -292,7 +186,6 @@ export default function Tracker({ currentUser }: TrackerProps) {
                                             ? (
                                                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
                                                     <div className="flex items-start space-x-3">
-                                                        <MessageSquare className="w-5 h-5 text-blue-600 mt-1 flex-shrink-0" />
                                                         <div>
                                                             <p className="font-semibold text-blue-900">Feedback</p>
                                                             <p className="text-sm text-blue-800">{submission.feedback[submission.feedback.length - 1].text}</p>
@@ -304,7 +197,6 @@ export default function Tracker({ currentUser }: TrackerProps) {
                                                 ? (
                                                     <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
                                                         <div className="flex items-start space-x-3">
-                                                            <MessageSquare className="w-5 h-5 text-blue-600 mt-1 flex-shrink-0" />
                                                             <div>
                                                                 <p className="font-semibold text-blue-900">Feedback</p>
                                                                 <p className="text-sm text-blue-800">{submission.feedback}</p>
@@ -317,186 +209,18 @@ export default function Tracker({ currentUser }: TrackerProps) {
 
                                     <div className="flex space-x-3 pt-4 border-t border-gray-200">
                                         <button
-                                            onClick={async () => {
-                                                setDetailLoading(true);
-                                                try {
-                                                    const res = await fetch(`${API_URL}/api/submission/${submission.id}`);
-                                                    if (!res.ok) throw new Error('Failed to fetch');
-                                                    const data = await res.json();
-                                                    setSelectedSubmission(data);
-                                                } catch (err) {
-                                                    console.error('Failed to fetch submission detail:', err);
-                                                } finally {
-                                                    setDetailLoading(false);
-                                                }
+                                            onClick={() => {
+                                                onSelectSubmission(submission.id);
+                                                setCurrentView('submission-view');
                                             }}
                                             className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
                                         >
                                             <Eye className="w-4 h-4" />
                                             <span>View Details</span>
                                         </button>
-                                        {submission.documents && submission.documents.length > 0 && (
-                                            <button className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
-                                                <Download className="w-4 h-4" />
-                                                <span>Download</span>
-                                            </button>
-                                        )}
                                     </div>
                                 </div>
                             ))
-                        )}
-                    </div>
-                </div>
-            )}
-
-            {/* Modal for details */}
-            {selectedSubmission && (
-                <div
-                    className="fixed inset-0 flex items-center justify-center bg-black/30 z-50"
-                    onClick={() => {
-                        refreshSubmissionData(selectedSubmission.id);
-                        setSelectedSubmission(null);
-                    }}
-                >
-                    <div
-                        className="bg-white rounded-lg shadow-lg w-11/12 max-w-2xl max-h-[60vh] overflow-y-auto p-8"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        {detailLoading ? (
-                            <div className="flex justify-center items-center py-12">
-                                <Loader className="w-6 h-6 animate-spin text-red-600" />
-                            </div>
-                        ) : (
-                            <div>
-                                {/* Header with close button and title on same line */}
-                                <div className="flex justify-between items-start mb-4">
-                                    <h2 className="text-2xl font-bold text-gray-900">{selectedSubmission.activityName}</h2>
-                                    <button
-                                        onClick={() => {
-                                            refreshSubmissionData(selectedSubmission.id);
-                                            setSelectedSubmission(null);
-                                        }}
-                                        className="text-gray-500 hover:text-gray-700 text-2xl leading-none ml-4"
-                                    >
-                                        ✕
-                                    </button>
-                                </div>
-
-                                {/* Affiliate Name - Small, Italic */}
-                                <p className="text-sm italic text-gray-500 mb-4">{selectedSubmission.affiliateName}</p>
-
-                                {/* Horizontal Gray Line */}
-                                <div className="border-t border-gray-300 mb-6"></div>
-
-                                {/* Info Grid */}
-                                <div className="grid grid-cols-2 gap-4 mb-6">
-                                    {/* Type Section */}
-                                    <div>
-                                        <p className="text-xs text-gray-500 font-medium mb-1">Type</p>
-                                        <p className="text-base font-bold text-gray-900">{selectedSubmission.type}</p>
-                                    </div>
-
-                                    {/* Status Section */}
-                                    <div>
-                                        <p className="text-xs text-gray-500 font-medium mb-1">Status</p>
-                                        <p className="text-base font-bold text-gray-900">{selectedSubmission.status}</p>
-                                    </div>
-
-                                    {/* Date Section */}
-                                    <div>
-                                        <p className="text-xs text-gray-500 font-medium mb-1">Date</p>
-                                        <p className="text-base font-bold text-gray-900">{formatDate(selectedSubmission.submittedAt)}</p>
-                                    </div>
-
-                                    {/* Submitted By Section */}
-                                    <div>
-                                        <p className="text-xs text-gray-500 font-medium mb-1">Submitted By</p>
-                                        <p className="text-base font-bold text-gray-900">{selectedSubmission.submittedBy}</p>
-                                    </div>
-                                </div>
-
-                                {/* Comments Section */}
-                                <div className="mb-6">
-                                    <h3 className="text-sm font-semibold text-gray-900 mb-3">Comments</h3>
-                                    <div className="space-y-3 mb-4">
-                                        {Array.isArray(selectedSubmission.feedback) && selectedSubmission.feedback.length > 0 ? (
-                                            selectedSubmission.feedback.map((comment: any, index: number) => (
-                                                <div key={index} className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                                                    <div className="flex justify-between items-start mb-2">
-                                                        <p className="text-xs font-semibold text-gray-700">{comment.author || comment.authorId || 'Anonymous'}</p>
-                                                        <div className="flex items-center gap-2">
-                                                            <p className="text-xs text-gray-500">{comment.timestamp ? new Date(comment.timestamp).toLocaleDateString() : ''}</p>
-                                                            {currentUser && (comment.authorId === currentUser.id) && (
-                                                                <button
-                                                                    onClick={() => handleDeleteComment(index)}
-                                                                    className="text-xs text-red-600 hover:text-red-800 font-medium"
-                                                                >
-                                                                    Delete
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                    <p className="text-sm text-gray-700">{comment.text}</p>
-                                                </div>
-                                            ))
-                                        ) : typeof selectedSubmission.feedback === 'string' && selectedSubmission.feedback.trim() ? (
-                                            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                                                <p className="text-sm text-gray-700">{selectedSubmission.feedback}</p>
-                                            </div>
-                                        ) : (
-                                            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                                                <p className="text-sm text-gray-500 italic">No comments yet</p>
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* Reply Box */}
-                                    <div className="flex gap-2">
-                                        <input
-                                            type="text"
-                                            value={commentText}
-                                            onChange={(e) => setCommentText(e.target.value)}
-                                            onKeyPress={(e) => {
-                                                if (e.key === 'Enter' && commentText.trim()) {
-                                                    handleAddComment();
-                                                }
-                                            }}
-                                            placeholder="Add a reply..."
-                                            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
-                                        />
-                                        <button
-                                            onClick={() => {
-                                                if (commentText.trim()) {
-                                                    handleAddComment();
-                                                }
-                                            }}
-                                            className="px-4 py-2 bg-red-600 text-white rounded-lg font-medium text-sm hover:bg-red-700 transition-colors"
-                                        >
-                                            Send
-                                        </button>
-                                    </div>
-                                </div>
-
-                                {/* Documents Section */}
-                                {selectedSubmission.documents && selectedSubmission.documents.length > 0 && (
-                                    <div>
-                                        <h3 className="text-sm font-semibold text-gray-900 mb-3">Documents</h3>
-                                        <div className="space-y-2">
-                                            {selectedSubmission.documents.map((d: string, i: number) => (
-                                                <a
-                                                    key={i}
-                                                    href={d}
-                                                    target="_blank"
-                                                    rel="noreferrer"
-                                                    className="flex items-center text-sm text-blue-600 hover:text-blue-800 hover:underline"
-                                                >
-                                                    📄 {d.split('/').pop()}
-                                                </a>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
                         )}
                     </div>
                 </div>

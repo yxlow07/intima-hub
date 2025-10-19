@@ -12,9 +12,9 @@ interface SubmissionProps {
     };
     setFormData: (formData: any) => void;
     validationErrors: string[];
-    uploadedFiles: string[];
+    uploadedFiles: File[];
     handleFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
-    setUploadedFiles: (files: string[]) => void;
+    setUploadedFiles: (files: File[]) => void;
     handleSubmit: () => void;
     setCurrentView: (view: 'login' | 'dashboard' | 'submission' | 'tracker') => void;
     affiliates: Affiliate[];
@@ -175,7 +175,7 @@ export default function Submission({ formData, setFormData, validationErrors, up
                                 <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                                     <div className="flex items-center space-x-3">
                                         <FileText className="w-5 h-5 text-gray-600" />
-                                        <span className="text-sm text-gray-900">{file.split('/').pop()}</span>
+                                        <span className="text-sm text-gray-900">{file.name}</span>
                                     </div>
                                     <button
                                         onClick={() => setUploadedFiles(uploadedFiles.filter((_, i) => i !== index))}

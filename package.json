@@ -16,6 +16,8 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@google/genai": "^1.25.0",
+    "@google/generative-ai": "^0.24.1",
     "@types/multer": "^2.0.0",
     "bcrypt": "^6.0.0",
     "body-parser": "^2.2.0",

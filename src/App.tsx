@@ -39,6 +39,7 @@ export default function INTIMAHub() {
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState<string>('all');
     const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     // Clear alert when navigating to a different view
     useEffect(() => {
@@ -115,6 +116,7 @@ export default function INTIMAHub() {
 
     const handleSubmit = async () => {
         if (validateForm()) {
+            setIsSubmitting(true);
             try {
                 // Step 1: Upload all selected files
                 const uploadedFilePaths: string[] = [];
@@ -139,7 +141,7 @@ export default function INTIMAHub() {
                     uploadedFilePaths.push(uploadData.path);
                 }
 
-                // Step 2: Submit form with uploaded file paths
+                // Step 2: Submit form with uploaded file paths (status will be "Pending Validation")
                 const endpoint = `${API_URL}/api/submission/${formData.type.toLowerCase()}`;
 
                 const submissionData = {
@@ -164,12 +166,13 @@ export default function INTIMAHub() {
                 }
 
                 const data = await submitResponse.json();
+                const submissionId = data.id;
 
                 // Find affiliate name for display
                 const affiliate = affiliates.find(a => a.id === formData.affiliateId);
 
                 const newSubmission: Submission = {
-                    id: data.id,
+                    id: submissionId,
                     type: formData.type,
                     affiliateName: affiliate?.name || 'Unknown Affiliate',
                     activityName: formData.activityName,
@@ -193,12 +196,18 @@ export default function INTIMAHub() {
                 setSelectedFiles([]);
                 setValidationErrors([]);
 
-                // Show success alert and redirect
+                // Show success alert and redirect immediately
                 setAlert({
                     type: 'success',
-                    message: `Your ${formData.type} submission has been successfully submitted!`
+                    message: `Your ${formData.type} submission has been successfully submitted! Validation is in progress...`
                 });
+                setIsSubmitting(false);
                 setCurrentView('tracker');
+
+                // Step 3: Trigger Gemini validation asynchronously in the background
+                // This will update the status to "Awaiting INTIMA Review" when complete
+                triggerGeminiValidation(submissionId, formData.type);
+
             } catch (err) {
                 console.error('Error submitting form:', err);
                 const errorMessage = err instanceof Error ? err.message : 'Failed to submit form. Please try again.';
@@ -207,7 +216,38 @@ export default function INTIMAHub() {
                     message: errorMessage
                 });
                 setValidationErrors([errorMessage]);
+                setIsSubmitting(false);
             }
+        }
+    };
+
+    // Async function to trigger Gemini validation without blocking UI
+    const triggerGeminiValidation = async (submissionId: string, submissionType: 'SAP' | 'ASF') => {
+        try {
+            // This endpoint will:
+            // 1. Get the submission from database
+            // 2. Send file to Gemini for validation
+            // 3. Parse the results
+            // 4. Update the status to "Awaiting INTIMA Review" and store comments
+            const response = await fetch(`${API_URL}/api/validate-submission/${submissionId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    formType: submissionType,
+                })
+            });
+
+            if (response.ok) {
+                console.log('Submission validation completed successfully');
+                // Optionally refresh submissions to show updated status
+                // You could also use a websocket or polling here
+            } else {
+                console.error('Validation request failed');
+            }
+        } catch (err) {
+            console.error('Error triggering validation:', err);
         }
     };
 
@@ -300,6 +340,7 @@ export default function INTIMAHub() {
                         handleSubmit={handleSubmit}
                         setCurrentView={setCurrentView}
                         affiliates={affiliates}
+                        isSubmitting={isSubmitting}
                     />
                 )}
 

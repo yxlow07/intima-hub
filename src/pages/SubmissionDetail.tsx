@@ -127,6 +127,7 @@ export default function SubmissionDetail({ submission, currentUser }: Submission
                 setUploadingSignedForm(true);
                 const formData = new FormData();
                 formData.append('file', signedFormFile);
+                formData.append('isSigned', 'true');
 
                 const uploadResponse = await fetch(`${API_URL}/api/upload`, {
                     method: 'POST',
@@ -644,6 +645,74 @@ export default function SubmissionDetail({ submission, currentUser }: Submission
                 </div>
             </div>
 
+            {/* Validation Results Section - Gemini AI Validation Results */}
+            {(() => {
+                // Parse comments if they're a string
+                let commentsList: any[] | null = submission.comments as any;
+                if (typeof commentsList === 'string') {
+                    try {
+                        commentsList = JSON.parse(commentsList);
+                    } catch (e) {
+                        commentsList = null;
+                    }
+                }
+
+                // Check if we have validation comments
+                const hasValidationComments = commentsList && Array.isArray(commentsList) && commentsList.some((comment: any) => 'field' in comment && 'severity' in comment);
+
+                if (!hasValidationComments) return null;
+
+                return (
+                    <div className="bg-blue-50 rounded-xl shadow-sm border border-blue-200 p-6 mb-6">
+                        <p className="text-xs font-medium text-gray-500 uppercase mb-4">Validation Results</p>
+                        <div className="space-y-3">
+                            {commentsList!
+                                .filter((comment: any) => 'field' in comment && 'severity' in comment && 'message' in comment)
+                                .map((comment: any, idx: number) => {
+                                    const severityColors: Record<string, string> = {
+                                        'critical': 'bg-red-50 border-red-200 text-red-900',
+                                        'major': 'bg-orange-50 border-orange-200 text-orange-900',
+                                        'info': 'bg-blue-50 border-blue-200 text-blue-900',
+                                        'minor': 'bg-yellow-50 border-yellow-200 text-yellow-900',
+                                    };
+
+                                    const severityIcons: Record<string, string> = {
+                                        'critical': '🔴',
+                                        'major': '🟠',
+                                        'info': '🔵',
+                                        'minor': '🟡',
+                                    };
+
+                                    const severityClass = severityColors[comment.severity] || severityColors['info'];
+                                    const severityIcon = severityIcons[comment.severity] || severityIcons['info'];
+
+                                    return (
+                                        <div key={idx} className={`border rounded-lg p-4 ${severityClass}`}>
+                                            <div className="flex gap-3">
+                                                <span className="text-lg flex-shrink-0">{severityIcon}</span>
+                                                <div className="flex-1">
+                                                    <div className="flex justify-between items-start mb-1">
+                                                        <p className="text-sm font-semibold">{comment.field}</p>
+                                                        <span className="text-xs font-medium px-2 py-1 rounded bg-white/50">
+                                                            {comment.severity.toUpperCase()}
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-sm mb-2">{comment.message}</p>
+                                                    {comment.suggested_fix && (
+                                                        <p className="text-xs italic">
+                                                            <strong>Fix:</strong> {comment.suggested_fix}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                        </div>
+                    </div>
+                );
+            })()}
+
             {/* Feedback/Comments Section */}
             {submission.feedback && (
                 <div>
@@ -653,13 +722,16 @@ export default function SubmissionDetail({ submission, currentUser }: Submission
                             <p className="text-sm text-gray-700">{submission.feedback}</p>
                         ) : Array.isArray(submission.feedback) ? (
                             <div className="space-y-4">
-                                {[...submission.feedback].reverse().map((comment: any, idx: number) => (
-                                    <div key={idx} className="border-l-2 border-gray-300 pl-4">
-                                        <p className="text-sm font-medium text-gray-900">{comment.author || 'Anonymous'}</p>
-                                        <p className="text-xs text-gray-500 mt-1">{new Date(comment.timestamp).toLocaleString()}</p>
-                                        <p className="text-sm text-gray-700 mt-2">{comment.text}</p>
-                                    </div>
-                                ))}
+                                {[...submission.feedback]
+                                    .filter((comment: any) => !('field' in comment && 'severity' in comment && 'message' in comment))
+                                    .reverse()
+                                    .map((comment: any, idx: number) => (
+                                        <div key={idx} className="border-l-2 border-gray-300 pl-4">
+                                            <p className="text-sm font-medium text-gray-900">{comment.author || 'Anonymous'}</p>
+                                            <p className="text-xs text-gray-500 mt-1">{comment.timestamp ? new Date(comment.timestamp).toLocaleString() : ''}</p>
+                                            <p className="text-sm text-gray-700 mt-2">{comment.text}</p>
+                                        </div>
+                                    ))}
                             </div>
                         ) : null}
                     </div>

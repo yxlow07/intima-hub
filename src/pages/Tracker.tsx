@@ -183,16 +183,53 @@ export default function Tracker({ currentUser, setCurrentView, onSelectSubmissio
 
                                     {submission.feedback && (
                                         Array.isArray(submission.feedback) && submission.feedback.length > 0
-                                            ? (
-                                                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-                                                    <div className="flex items-start space-x-3">
-                                                        <div>
-                                                            <p className="font-semibold text-blue-900">Feedback</p>
-                                                            <p className="text-sm text-blue-800">{submission.feedback[submission.feedback.length - 1].text}</p>
+                                            ? (() => {
+                                                // Separate validation comments from user feedback
+                                                const userFeedback = submission.feedback.filter((c: any) => !('field' in c && 'severity' in c && 'message' in c));
+                                                const validationComments = submission.feedback.filter((c: any) => 'field' in c && 'severity' in c && 'message' in c);
+
+                                                // Filter user feedback to only show comments from others (not from current user)
+                                                const otherUserFeedback = userFeedback.filter((c: any) => c.authorId !== currentUser?.id);
+
+                                                // Show feedback from others if available, otherwise show top validation result
+                                                const displayComment = otherUserFeedback.length > 0
+                                                    ? otherUserFeedback[otherUserFeedback.length - 1]
+                                                    : validationComments[0];
+
+                                                if (!displayComment) return null;
+
+                                                const isValidation = 'field' in displayComment && 'severity' in displayComment;
+                                                const severityColors: Record<string, string> = {
+                                                    'critical': 'bg-red-50 border-red-200',
+                                                    'major': 'bg-orange-50 border-orange-200',
+                                                    'info': 'bg-blue-50 border-blue-200',
+                                                    'minor': 'bg-yellow-50 border-yellow-200',
+                                                };
+                                                const displayClass = isValidation
+                                                    ? severityColors[displayComment.severity] || 'bg-blue-50 border-blue-200'
+                                                    : 'bg-blue-50 border-blue-200';
+
+                                                return (
+                                                    <div className={`${displayClass} border rounded-lg p-4 mb-4`}>
+                                                        <div className="flex items-start space-x-3">
+                                                            <div className="flex-1">
+                                                                {isValidation ? (
+                                                                    <>
+                                                                        <p className="font-semibold text-gray-900">Validation error: {displayComment.field}</p>
+                                                                        <p className="text-sm text-gray-700">{displayComment.message}</p>
+                                                                        <p className="text-xs text-gray-600 mt-1"><strong>Fix:</strong> {displayComment.suggested_fix}</p>
+                                                                    </>
+                                                                ) : (
+                                                                    <>
+                                                                        <p className="font-semibold text-blue-900">Feedback from {displayComment.author || 'System'}</p>
+                                                                        <p className="text-sm text-blue-800">{displayComment.text}</p>
+                                                                    </>
+                                                                )}
+                                                            </div>
                                                         </div>
                                                     </div>
-                                                </div>
-                                            )
+                                                );
+                                            })()
                                             : typeof submission.feedback === 'string' && submission.feedback.trim()
                                                 ? (
                                                     <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">

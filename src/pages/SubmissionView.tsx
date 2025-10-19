@@ -449,6 +449,79 @@ export default function SubmissionView({ submissionId, currentUser, setCurrentVi
                         </div>
                     </div>
 
+                    {/* Validation Comments Section - Gemini AI Validation Results */}
+                    {(() => {
+                        // Parse comments if they're a string
+                        let commentsList: any[] | null = submission.comments as any;
+                        if (typeof commentsList === 'string') {
+                            try {
+                                commentsList = JSON.parse(commentsList);
+                            } catch (e) {
+                                commentsList = null;
+                            }
+                        }
+
+                        // Check if we have validation comments
+                        const hasValidationComments = commentsList && Array.isArray(commentsList) && commentsList.some((comment: any) => 'field' in comment && 'severity' in comment);
+
+                        if (!hasValidationComments) return null;
+
+                        return (
+                            <div className="bg-blue-50 rounded-xl shadow-sm border border-blue-200 p-6 mb-6">
+                                <div className="flex items-center gap-2 mb-4">
+                                    <Clock className="w-5 h-5 text-blue-600" />
+                                    <h3 className="text-sm font-semibold text-gray-900">Validation Results</h3>
+                                </div>
+
+                                <div className="space-y-3">
+                                    {commentsList!
+                                        .filter((comment: any) => 'field' in comment && 'severity' in comment && 'message' in comment)
+                                        .map((comment: any, index: number) => {
+                                            // Determine severity color
+                                            const severityColors: Record<string, string> = {
+                                                'critical': 'bg-red-50 border-red-200 text-red-900',
+                                                'major': 'bg-orange-50 border-orange-200 text-orange-900',
+                                                'info': 'bg-blue-50 border-blue-200 text-blue-900',
+                                                'minor': 'bg-yellow-50 border-yellow-200 text-yellow-900',
+                                            };
+
+                                            const severityIcons: Record<string, string> = {
+                                                'critical': '🔴',
+                                                'major': '🟠',
+                                                'info': '🔵',
+                                                'minor': '🟡',
+                                            };
+
+                                            const severityClass = severityColors[comment.severity] || severityColors['info'];
+                                            const severityIcon = severityIcons[comment.severity] || severityIcons['info'];
+
+                                            return (
+                                                <div key={index} className={`border rounded-lg p-4 ${severityClass}`}>
+                                                    <div className="flex gap-3">
+                                                        <span className="text-lg flex-shrink-0">{severityIcon}</span>
+                                                        <div className="flex-1">
+                                                            <div className="flex justify-between items-start mb-1">
+                                                                <p className="text-sm font-semibold text-gray-900">{comment.field}</p>
+                                                                <span className="text-xs font-medium px-2 py-1 rounded bg-white/50">
+                                                                    {comment.severity.toUpperCase()}
+                                                                </span>
+                                                            </div>
+                                                            <p className="text-sm text-gray-700 mb-2">{comment.message}</p>
+                                                            {comment.suggested_fix && (
+                                                                <p className="text-xs text-gray-600 italic">
+                                                                    <strong>Fix:</strong> {comment.suggested_fix}
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                </div>
+                            </div>
+                        );
+                    })()}
+
                     {/* Amendment Section - Only show if status is "Requires Amendment" */}
                     {submission.status === 'Requires Amendment' && (
                         <div className="bg-orange-50 rounded-xl shadow-sm border border-orange-200 p-6 mb-6">
@@ -551,25 +624,34 @@ export default function SubmissionView({ submissionId, currentUser, setCurrentVi
                         {/* Comments List */}
                         <div className="space-y-3">
                             {Array.isArray(submission.feedback) && submission.feedback.length > 0 ? (
-                                [...submission.feedback].reverse().map((comment: any, index: number) => (
-                                    <div key={index} className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                                        <div className="flex justify-between items-start mb-2">
-                                            <p className="text-xs font-semibold text-gray-700">{comment.author || comment.authorId || 'Anonymous'}</p>
-                                            <div className="flex items-center gap-2">
-                                                <p className="text-xs text-gray-500">{comment.timestamp ? new Date(comment.timestamp).toLocaleDateString() : ''}</p>
-                                                {currentUser && (comment.authorId === currentUser.id) && comment.author !== 'System' && (
-                                                    <button
-                                                        onClick={() => handleDeleteComment(index)}
-                                                        className="text-xs text-red-600 hover:text-red-800 font-medium"
-                                                    >
-                                                        Delete
-                                                    </button>
-                                                )}
+                                [...submission.feedback]
+                                    .filter((comment: any) => !('field' in comment && 'severity' in comment && 'message' in comment))
+                                    .reverse()
+                                    .map((comment: any) => {
+                                        // Find the actual index in the original feedback array
+                                        const actualIndex = Array.isArray(submission.feedback)
+                                            ? submission.feedback.findIndex((c: any) => c === comment)
+                                            : -1;
+                                        return (
+                                            <div key={actualIndex} className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                                                <div className="flex justify-between items-start mb-2">
+                                                    <p className="text-xs font-semibold text-gray-700">{comment.author || comment.authorId || 'Anonymous'}</p>
+                                                    <div className="flex items-center gap-2">
+                                                        <p className="text-xs text-gray-500">{comment.timestamp ? new Date(comment.timestamp).toLocaleDateString() : ''}</p>
+                                                        {currentUser && (comment.authorId === currentUser.id) && comment.author !== 'System' && (
+                                                            <button
+                                                                onClick={() => handleDeleteComment(actualIndex)}
+                                                                className="text-xs text-red-600 hover:text-red-800 font-medium"
+                                                            >
+                                                                Delete
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                <p className="text-sm text-gray-700">{comment.text}</p>
                                             </div>
-                                        </div>
-                                        <p className="text-sm text-gray-700">{comment.text}</p>
-                                    </div>
-                                ))
+                                        );
+                                    })
                             ) : (
                                 <p className="text-sm text-gray-500">No comments yet</p>
                             )}

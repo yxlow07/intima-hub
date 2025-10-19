@@ -11,6 +11,11 @@ INTIMA Hub is a full-stack application designed to streamline the submission and
 - **Dual Submission Types**: Support for SAP (Student Activity Proposal) and ASF (Activity Summary Form)
 - **Role-Based Access**: Separate interfaces for Students and INTIMA Administrators
 - **Multi-Department Reviews**: Finance and Activities department review workflows
+- **🤖 Gemini AI Validation**: Automatic document validation against submission requirements
+  - Instant feedback on submission compliance
+  - Non-blocking background processing
+  - Color-coded severity levels (Critical, Major, Minor, Info)
+  - Intelligent status determination based on validation results
 - **PDF Document Management**: Upload and store multiple PDF files per submission
 - **Status Tracking**: Comprehensive status workflow (Pending Validation → Awaiting INTIMA Review → Approved/Rejected/Requires Amendment)
 - **Amendment Workflow**: Students can submit amended documents when requesting amendments with drag-and-drop interface
@@ -38,11 +43,12 @@ INTIMA Hub is a full-stack application designed to streamline the submission and
 6. [Installation & Setup](#installation--setup)
 7. [Running the Application](#running-the-application)
 8. [Key Features Deep Dive](#key-features-deep-dive)
-9. [Amendment Workflow](#amendment-workflow)
-10. [File Naming Convention](#file-naming-convention)
-11. [Admin Management Features](#-admin-management-features)
-12. [Admin Dashboard](#-admin-dashboard)
-13. [Admin Navigation](#-admin-navigation)
+9. [Gemini AI Validation System](#-gemini-ai-validation-system)
+10. [Amendment Workflow](#-amendment-workflow)
+11. [File Naming Convention](#file-naming-convention)
+12. [Admin Management Features](#-admin-management-features)
+13. [Admin Dashboard](#-admin-dashboard)
+14. [Admin Navigation](#-admin-navigation)
 
 ---
 
@@ -278,6 +284,22 @@ Awaiting INTIMA Review (Auto-triggered when Finance OR Activities department rev
 
   - Delete comment by index
   - Body: `{ formType, commentIndex, userId }`
+
+- **POST** `/api/validate-submission/:id`
+
+  - Trigger Gemini AI validation for submitted documents
+  - Body: `{ formType: 'SAP' | 'ASF' }`
+  - **Async Processing**: Returns immediately, validates in background
+  - **Auto-Status Update**: Updates submission status based on validation results
+    - Sets `Requires Amendment` if critical/major issues found
+    - Sets `Awaiting INTIMA Review` if validation passes
+  - **Validation Results**: Stores detailed feedback in comments field with:
+    - `field`: Section that needs attention
+    - `severity`: 'critical', 'major', 'minor', 'info'
+    - `message`: Description of the issue
+    - `suggested_fix`: Recommendation for fixing the issue
+  - **Gemini Model**: Uses Google Generative AI (Gemini 2.0 Flash)
+  - **Rules Engine**: Validates against SAP/ASF specific rules (MD files)
 
 - **PATCH** `/api/submission/:id/status`
   - Submit amendment for "Requires Amendment" status
@@ -726,6 +748,159 @@ Review amended document and make final decision
 - **Immutable History**: Amendment comments marked as [AMENDMENT] and cannot be deleted
 - **Single Document**: Only one amendment file per submission (previous overwritten)
 - **One-Click Transition**: Automatically moves to "Awaiting INTIMA Review" status
+
+---
+
+## 🤖 Gemini AI Validation System
+
+The application integrates Google's Generative AI (Gemini 2.0 Flash) for automatic document validation against SAP and ASF submission requirements.
+
+### Overview
+
+When a student submits a form:
+
+1. **Immediate Submission**: Form data saved to database with `Pending Validation` status
+2. **User Redirect**: Student redirected to tracker immediately (no waiting for validation)
+3. **Background Validation**: Gemini AI processes the PDF asynchronously
+4. **Auto-Status Update**: Status updated to either:
+   - `Requires Amendment` (if critical/major issues found)
+   - `Awaiting INTIMA Review` (if validation passes)
+5. **Feedback Stored**: Validation results displayed in submission comments
+
+### Validation Process Flow
+
+```
+Student Submits Form
+    ↓
+Files Uploaded to Server
+    ↓
+Submission Created with "Pending Validation" Status
+    ↓
+User Redirected to Tracker (Immediate) ✓
+    ↓
+[Background] Gemini API Called for Validation
+    ↓
+[Background] Document Analyzed Against Rules
+    ↓
+[Background] Validation Results Stored
+    ↓
+[Background] Status Updated to "Requires Amendment" or "Awaiting INTIMA Review"
+    ↓
+[User Experience] Validation errors displayed in submission view
+```
+
+### Validation Rules
+
+Validation rules are defined in Markdown files:
+
+- `src/rules/sap.md` - Student Activity Proposal rules
+- `src/rules/asf.md` - Activity Summary Form rules
+
+These files contain:
+
+- Submission requirements
+- Format specifications
+- Required fields and sections
+- Compliance guidelines
+
+### Validation Result Format
+
+Each validation result includes:
+
+```typescript
+{
+  field: string,              // Section/field being validated
+  severity: "critical" | "major" | "minor" | "info",  // Issue severity
+  message: string,            // Clear description of the issue
+  suggested_fix: string       // Recommended action to fix
+}
+```
+
+### Severity Levels
+
+- **🔴 Critical**: Major compliance issue blocking approval
+- **🟠 Major**: Significant issue requiring amendment
+- **🟡 Minor**: Small issue worth addressing
+- **🔵 Info**: Informational comment
+
+### Status Determination
+
+The system automatically determines status based on validation results:
+
+**Sets `Requires Amendment` if:**
+
+- Any critical severity issues found
+- Any major severity issues found
+- Validation encounters errors
+
+**Sets `Awaiting INTIMA Review` if:**
+
+- Validation passes with only minor/info issues
+- All critical and major issues cleared
+
+### Environment Setup
+
+For Gemini AI validation to work, set environment variables:
+
+```env
+GEMINI_API_KEY=your_google_generative_ai_api_key
+GEMINI_MODEL=gemini-2.0-flash  # Optional, defaults to gemini-2.0-flash
+```
+
+### Backend Implementation
+
+**Validation Endpoint**: `POST /api/validate-submission/:id`
+
+```typescript
+// Triggers asynchronous validation
+// Returns immediately with 202 status
+// Processes validation in background
+// Updates status and comments when complete
+```
+
+**Key Features:**
+
+- Non-blocking: Returns immediately to user
+- Background processing: No timeout waiting
+- Database persistence: Results stored in `comments` field
+- Error handling: Graceful fallback if validation fails
+- Logging: Console logs for debugging
+
+### Frontend Display
+
+Validation results display in:
+
+1. **SubmissionView.tsx** (Student's view)
+
+   - Shows validation results at top of submission
+   - Color-coded by severity
+   - Includes suggested fixes
+   - Amendment section appears if `Requires Amendment` status
+
+2. **SubmissionDetail.tsx** (Admin's view)
+   - Full validation results display
+   - Helps admins understand why amendment was required
+   - Educational reference during review
+
+### Example Validation Output
+
+```json
+{
+  "field": "Submission Timeline",
+  "message": "SAP submitted less than 7 working days before activity date",
+  "severity": "critical",
+  "suggested_fix": "Resubmit at least 7 working days prior or explain urgency"
+}
+```
+
+### Benefits
+
+✅ **Instant Feedback**: Students get validation results quickly  
+✅ **Non-Blocking**: No waiting for validation to complete  
+✅ **Consistency**: Automated checks against ruleset  
+✅ **Transparency**: Clear explanation of issues and fixes  
+✅ **Efficiency**: Reduces manual pre-review checking  
+✅ **Quality**: Ensures submissions meet requirements before admin review
 
 ---
 

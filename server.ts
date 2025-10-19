@@ -5,6 +5,7 @@ import bodyParser from 'body-parser';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import { validateDocumentWithGemini } from './src/rules/gemini';
 import { db } from './src/db';
 import { users, sap, asf, affiliates, submissions } from './src/db/schema';
 import { eq, inArray, sql } from 'drizzle-orm';
@@ -103,15 +104,20 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
     const activityName = req.body.activityName || 'Activity';
     const date = req.body.date || '';
     const isAmendment = req.body.isAmendment === 'true' || req.body.isAmendment === true;
+    const isSigned = req.body.isSigned === 'true' || req.body.isSigned === true;
 
     // Generate filename
     const ext = path.extname(req.file.originalname);
     let newFilename: string;
 
-    if (isAmendment) {
-      // For amendments: amended_UUID.pdf
+    if (isSigned) {
+      // For signed forms: SIGNED_UUID.pdf
       const uuid = require('crypto').randomUUID();
-      newFilename = `amended_${uuid}${ext}`;
+      newFilename = `SIGNED_${uuid}${ext}`;
+    } else if (isAmendment) {
+      // For amendments: AMENDED_UUID.pdf
+      const uuid = require('crypto').randomUUID();
+      newFilename = `AMENDED_${uuid}${ext}`;
     } else {
       // For regular uploads: SAP/ASF_Activity_Name_UUID.pdf (removed date and timestamp)
       const sanitizedActivityName = activityName.replace(/[^a-zA-Z0-9\s-]/g, '').trim().replace(/\s+/g, '_');
@@ -126,10 +132,14 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
     let finalPath = path.join(uploadsDir, newFilename);
     let counter = 1;
     while (fs.existsSync(finalPath)) {
-      if (isAmendment) {
-        // For amendments: amended_v1, amended_v2, etc.
+      if (isSigned) {
+        // For signed forms: SIGNED_v1, SIGNED_v2, etc.
         const nameParts = newFilename.split(ext);
-        newFilename = `amended_v${counter}${ext}`;
+        newFilename = `SIGNED_v${counter}${ext}`;
+      } else if (isAmendment) {
+        // For amendments: AMENDED_v1, AMENDED_v2, etc.
+        const nameParts = newFilename.split(ext);
+        newFilename = `AMENDED_v${counter}${ext}`;
       } else {
         const nameParts = newFilename.split(ext);
         newFilename = `${nameParts[0]}_v${counter}${ext}`;
@@ -166,29 +176,45 @@ app.get('/api/submissions', async (req, res) => {
       .from(sap)
       .leftJoin(affiliates, eq(sap.affiliateId, affiliates.id));
 
-    const sapSubmissions = sapRows.map(row => ({
-      id: row.sap.id,
-      type: 'SAP' as const,
-      affiliateId: row.sap.affiliateId,
-      affiliateName: row.affiliates?.name || 'Unknown',
-      activityName: row.sap.activityName,
-      date: row.sap.date,
-      description: row.sap.description,
-      status: row.sap.status,
-      documents: (row.sap as any).files || [],
-      submittedBy: row.sap.submittedBy,
-      submittedAt: row.sap.submittedAt,
-      updatedAt: row.sap.updatedAt,
-      feedback: row.sap.comments,
-      financeReviewStatus: (row.sap as any).financeReviewStatus,
-      financeComments: (row.sap as any).financeComments,
-      financeReviewedBy: (row.sap as any).financeReviewedBy,
-      financeReviewedAt: (row.sap as any).financeReviewedAt,
-      activitiesReviewStatus: (row.sap as any).activitiesReviewStatus,
-      activitiesComments: (row.sap as any).activitiesComments,
-      activitiesReviewedBy: (row.sap as any).activitiesReviewedBy,
-      activitiesReviewedAt: (row.sap as any).activitiesReviewedAt,
-    }));
+    const sapSubmissions = sapRows.map(row => {
+      // Parse comments if they're stored as JSON string
+      let parsedComments = null;
+      if (row.sap.comments) {
+        try {
+          parsedComments = typeof row.sap.comments === 'string' 
+            ? JSON.parse(row.sap.comments) 
+            : row.sap.comments;
+        } catch (e) {
+          console.error('Error parsing comments:', e);
+          parsedComments = null;
+        }
+      }
+      
+      return {
+        id: row.sap.id,
+        type: 'SAP' as const,
+        affiliateId: row.sap.affiliateId,
+        affiliateName: row.affiliates?.name || 'Unknown',
+        activityName: row.sap.activityName,
+        date: row.sap.date,
+        description: row.sap.description,
+        status: row.sap.status,
+        documents: (row.sap as any).files || [],
+        submittedBy: row.sap.submittedBy,
+        submittedAt: row.sap.submittedAt,
+        updatedAt: row.sap.updatedAt,
+        feedback: row.sap.comments,
+        comments: parsedComments,
+        financeReviewStatus: (row.sap as any).financeReviewStatus,
+        financeComments: (row.sap as any).financeComments,
+        financeReviewedBy: (row.sap as any).financeReviewedBy,
+        financeReviewedAt: (row.sap as any).financeReviewedAt,
+        activitiesReviewStatus: (row.sap as any).activitiesReviewStatus,
+        activitiesComments: (row.sap as any).activitiesComments,
+        activitiesReviewedBy: (row.sap as any).activitiesReviewedBy,
+        activitiesReviewedAt: (row.sap as any).activitiesReviewedAt,
+      };
+    });
 
     // Query ASF submissions with safe column selection
     const asfRows = await db
@@ -196,29 +222,45 @@ app.get('/api/submissions', async (req, res) => {
       .from(asf)
       .leftJoin(affiliates, eq(asf.affiliateId, affiliates.id));
 
-    const asfSubmissions = asfRows.map(row => ({
-      id: row.asf.id,
-      type: 'ASF' as const,
-      affiliateId: row.asf.affiliateId,
-      affiliateName: row.affiliates?.name || 'Unknown',
-      activityName: row.asf.activityName,
-      date: row.asf.date,
-      description: row.asf.description,
-      status: row.asf.status,
-      documents: (row.asf as any).files || [],
-      submittedBy: row.asf.submittedBy,
-      submittedAt: row.asf.submittedAt,
-      updatedAt: row.asf.updatedAt,
-      feedback: row.asf.comments,
-      financeReviewStatus: (row.asf as any).financeReviewStatus,
-      financeComments: (row.asf as any).financeComments,
-      financeReviewedBy: (row.asf as any).financeReviewedBy,
-      financeReviewedAt: (row.asf as any).financeReviewedAt,
-      activitiesReviewStatus: (row.asf as any).activitiesReviewStatus,
-      activitiesComments: (row.asf as any).activitiesComments,
-      activitiesReviewedBy: (row.asf as any).activitiesReviewedBy,
-      activitiesReviewedAt: (row.asf as any).activitiesReviewedAt,
-    }));
+    const asfSubmissions = asfRows.map(row => {
+      // Parse comments if they're stored as JSON string
+      let parsedComments = null;
+      if (row.asf.comments) {
+        try {
+          parsedComments = typeof row.asf.comments === 'string' 
+            ? JSON.parse(row.asf.comments) 
+            : row.asf.comments;
+        } catch (e) {
+          console.error('Error parsing comments:', e);
+          parsedComments = null;
+        }
+      }
+      
+      return {
+        id: row.asf.id,
+        type: 'ASF' as const,
+        affiliateId: row.asf.affiliateId,
+        affiliateName: row.affiliates?.name || 'Unknown',
+        activityName: row.asf.activityName,
+        date: row.asf.date,
+        description: row.asf.description,
+        status: row.asf.status,
+        documents: (row.asf as any).files || [],
+        submittedBy: row.asf.submittedBy,
+        submittedAt: row.asf.submittedAt,
+        updatedAt: row.asf.updatedAt,
+        feedback: row.asf.comments,
+        comments: parsedComments,
+        financeReviewStatus: (row.asf as any).financeReviewStatus,
+        financeComments: (row.asf as any).financeComments,
+        financeReviewedBy: (row.asf as any).financeReviewedBy,
+        financeReviewedAt: (row.asf as any).financeReviewedAt,
+        activitiesReviewStatus: (row.asf as any).activitiesReviewStatus,
+        activitiesComments: (row.asf as any).activitiesComments,
+        activitiesReviewedBy: (row.asf as any).activitiesReviewedBy,
+        activitiesReviewedAt: (row.asf as any).activitiesReviewedAt,
+      };
+    });
 
     const allSubmissions = [...sapSubmissions, ...asfSubmissions];
 
@@ -259,29 +301,45 @@ app.get('/api/submissions/user/:userId', async (req, res) => {
       .leftJoin(affiliates, eq(sap.affiliateId, affiliates.id))
       .where(inArray(sap.affiliateId, affiliateIds));
 
-    const sapSubmissions = sapRows.map(row => ({
-      id: row.sap.id,
-      type: 'SAP' as const,
-      affiliateId: row.sap.affiliateId,
-      affiliateName: row.affiliates?.name || 'Unknown',
-      activityName: row.sap.activityName,
-      date: row.sap.date,
-      description: row.sap.description,
-      status: row.sap.status,
-      documents: (row.sap as any).files || [],
-      submittedBy: row.sap.submittedBy,
-      submittedAt: row.sap.submittedAt,
-      updatedAt: row.sap.updatedAt,
-      feedback: row.sap.comments,
-      financeReviewStatus: (row.sap as any).financeReviewStatus,
-      financeComments: (row.sap as any).financeComments,
-      financeReviewedBy: (row.sap as any).financeReviewedBy,
-      financeReviewedAt: (row.sap as any).financeReviewedAt,
-      activitiesReviewStatus: (row.sap as any).activitiesReviewStatus,
-      activitiesComments: (row.sap as any).activitiesComments,
-      activitiesReviewedBy: (row.sap as any).activitiesReviewedBy,
-      activitiesReviewedAt: (row.sap as any).activitiesReviewedAt,
-    }));
+    const sapSubmissions = sapRows.map(row => {
+      // Parse comments if they're stored as JSON string
+      let parsedComments = null;
+      if (row.sap.comments) {
+        try {
+          parsedComments = typeof row.sap.comments === 'string' 
+            ? JSON.parse(row.sap.comments) 
+            : row.sap.comments;
+        } catch (e) {
+          console.error('Error parsing comments:', e);
+          parsedComments = null;
+        }
+      }
+      
+      return {
+        id: row.sap.id,
+        type: 'SAP' as const,
+        affiliateId: row.sap.affiliateId,
+        affiliateName: row.affiliates?.name || 'Unknown',
+        activityName: row.sap.activityName,
+        date: row.sap.date,
+        description: row.sap.description,
+        status: row.sap.status,
+        documents: (row.sap as any).files || [],
+        submittedBy: row.sap.submittedBy,
+        submittedAt: row.sap.submittedAt,
+        updatedAt: row.sap.updatedAt,
+        feedback: row.sap.comments,
+        comments: parsedComments,
+        financeReviewStatus: (row.sap as any).financeReviewStatus,
+        financeComments: (row.sap as any).financeComments,
+        financeReviewedBy: (row.sap as any).financeReviewedBy,
+        financeReviewedAt: (row.sap as any).financeReviewedAt,
+        activitiesReviewStatus: (row.sap as any).activitiesReviewStatus,
+        activitiesComments: (row.sap as any).activitiesComments,
+        activitiesReviewedBy: (row.sap as any).activitiesReviewedBy,
+        activitiesReviewedAt: (row.sap as any).activitiesReviewedAt,
+      };
+    });
 
     const asfRows = await db
       .select()
@@ -289,29 +347,45 @@ app.get('/api/submissions/user/:userId', async (req, res) => {
       .leftJoin(affiliates, eq(asf.affiliateId, affiliates.id))
       .where(inArray(asf.affiliateId, affiliateIds));
 
-    const asfSubmissions = asfRows.map(row => ({
-      id: row.asf.id,
-      type: 'ASF' as const,
-      affiliateId: row.asf.affiliateId,
-      affiliateName: row.affiliates?.name || 'Unknown',
-      activityName: row.asf.activityName,
-      date: row.asf.date,
-      description: row.asf.description,
-      status: row.asf.status,
-      documents: (row.asf as any).files || [],
-      submittedBy: row.asf.submittedBy,
-      submittedAt: row.asf.submittedAt,
-      updatedAt: row.asf.updatedAt,
-      feedback: row.asf.comments,
-      financeReviewStatus: (row.asf as any).financeReviewStatus,
-      financeComments: (row.asf as any).financeComments,
-      financeReviewedBy: (row.asf as any).financeReviewedBy,
-      financeReviewedAt: (row.asf as any).financeReviewedAt,
-      activitiesReviewStatus: (row.asf as any).activitiesReviewStatus,
-      activitiesComments: (row.asf as any).activitiesComments,
-      activitiesReviewedBy: (row.asf as any).activitiesReviewedBy,
-      activitiesReviewedAt: (row.asf as any).activitiesReviewedAt,
-    }));
+    const asfSubmissions = asfRows.map(row => {
+      // Parse comments if they're stored as JSON string
+      let parsedComments = null;
+      if (row.asf.comments) {
+        try {
+          parsedComments = typeof row.asf.comments === 'string' 
+            ? JSON.parse(row.asf.comments) 
+            : row.asf.comments;
+        } catch (e) {
+          console.error('Error parsing comments:', e);
+          parsedComments = null;
+        }
+      }
+      
+      return {
+        id: row.asf.id,
+        type: 'ASF' as const,
+        affiliateId: row.asf.affiliateId,
+        affiliateName: row.affiliates?.name || 'Unknown',
+        activityName: row.asf.activityName,
+        date: row.asf.date,
+        description: row.asf.description,
+        status: row.asf.status,
+        documents: (row.asf as any).files || [],
+        submittedBy: row.asf.submittedBy,
+        submittedAt: row.asf.submittedAt,
+        updatedAt: row.asf.updatedAt,
+        feedback: row.asf.comments,
+        comments: parsedComments,
+        financeReviewStatus: (row.asf as any).financeReviewStatus,
+        financeComments: (row.asf as any).financeComments,
+        financeReviewedBy: (row.asf as any).financeReviewedBy,
+        financeReviewedAt: (row.asf as any).financeReviewedAt,
+        activitiesReviewStatus: (row.asf as any).activitiesReviewStatus,
+        activitiesComments: (row.asf as any).activitiesComments,
+        activitiesReviewedBy: (row.asf as any).activitiesReviewedBy,
+        activitiesReviewedAt: (row.asf as any).activitiesReviewedAt,
+      };
+    });
 
     const allSubmissions = [...sapSubmissions, ...asfSubmissions];
 
@@ -338,6 +412,24 @@ app.get('/api/submission/:id', async (req, res) => {
 
     if (sapRows.length > 0) {
       const row = sapRows[0];
+      
+      console.log('SAP submission row.sap.comments:', JSON.stringify(row.sap.comments, null, 2));
+      
+      // Parse comments if they're stored as JSON string
+      let parsedComments = null;
+      if (row.sap.comments) {
+        try {
+          parsedComments = typeof row.sap.comments === 'string' 
+            ? JSON.parse(row.sap.comments) 
+            : row.sap.comments;
+        } catch (e) {
+          console.error('Error parsing comments:', e);
+          parsedComments = null;
+        }
+      }
+      
+      console.log('Parsed comments:', JSON.stringify(parsedComments, null, 2));
+      
       const result = {
         id: row.sap.id,
         type: 'SAP',
@@ -351,6 +443,7 @@ app.get('/api/submission/:id', async (req, res) => {
         submittedBy: row.sap.submittedBy,
         submittedAt: row.sap.submittedAt,
         feedback: row.sap.comments,
+        comments: parsedComments,
         financeReviewStatus: (row.sap as any).financeReviewStatus,
         financeComments: (row.sap as any).financeComments,
         financeReviewedBy: (row.sap as any).financeReviewedBy,
@@ -373,6 +466,20 @@ app.get('/api/submission/:id', async (req, res) => {
 
     if (asfRows.length > 0) {
       const row = asfRows[0];
+      
+      // Parse comments if they're stored as JSON string
+      let parsedComments = null;
+      if (row.asf.comments) {
+        try {
+          parsedComments = typeof row.asf.comments === 'string' 
+            ? JSON.parse(row.asf.comments) 
+            : row.asf.comments;
+        } catch (e) {
+          console.error('Error parsing comments:', e);
+          parsedComments = null;
+        }
+      }
+      
       const result = {
         id: row.asf.id,
         type: 'ASF',
@@ -386,6 +493,7 @@ app.get('/api/submission/:id', async (req, res) => {
         submittedBy: row.asf.submittedBy,
         submittedAt: row.asf.submittedAt,
         feedback: row.asf.comments,
+        comments: parsedComments,
         financeReviewStatus: (row.asf as any).financeReviewStatus,
         financeComments: (row.asf as any).financeComments,
         financeReviewedBy: (row.asf as any).financeReviewedBy,
@@ -1371,6 +1479,94 @@ app.delete('/api/affiliates/:id', async (req, res) => {
   } catch (error) {
     console.error('Error deleting affiliate:', error);
     res.status(500).json({ message: 'Internal server error', error: (error as any).message });
+  }
+});
+
+// Validate submission with Gemini asynchronously
+app.post('/api/validate-submission/:id', async (req, res) => {
+  const { id } = req.params;
+  const { formType } = req.body;
+
+  if (!formType || !['SAP', 'ASF'].includes(formType)) {
+    return res.status(400).json({ message: 'Invalid form type' });
+  }
+
+  try {
+    const table = formType === 'SAP' ? sap : asf;
+
+    // Get the submission record
+    const submission = await db
+      .select()
+      .from(table)
+      .where(eq(table.id, id))
+      .limit(1)
+      .then(rows => rows[0]);
+
+    if (!submission) {
+      return res.status(404).json({ message: 'Submission not found' });
+    }
+
+    // Return immediately to user
+    res.status(200).json({ message: 'Validation started', submissionId: id });
+
+    // Process validation asynchronously in the background
+    (async () => {
+      try {
+        if (submission.files && Array.isArray(submission.files) && submission.files.length > 0) {
+          const filePath = path.join(__dirname, (submission.files as string[])[0]);
+          
+          // Validate document with Gemini
+          const validationResult = await validateDocumentWithGemini(
+            formType.toLowerCase() as 'sap' | 'asf',
+            filePath
+          );
+
+          // Determine status based on validation results
+          let newStatus: 'Awaiting INTIMA Review' | 'Requires Amendment' = 'Awaiting INTIMA Review';
+          let commentsToStore = validationResult.comments || [];
+          
+          console.log('Validation Result:', JSON.stringify(validationResult, null, 2));
+          console.log('Comments to Store:', JSON.stringify(commentsToStore, null, 2));
+          
+          // Check if there are critical or major issues that require amendment
+          if (validationResult.comments && Array.isArray(validationResult.comments)) {
+            const hasCriticalIssues = validationResult.comments.some((comment: any) => comment.severity === 'critical');
+            const hasMajorIssues = validationResult.comments.some((comment: any) => comment.severity === 'major');
+            
+            if (hasCriticalIssues || hasMajorIssues) {
+              newStatus = 'Requires Amendment';
+            }
+          } else if (validationResult.status === 'not-validated' || validationResult.status === 'error') {
+            newStatus = 'Requires Amendment';
+          }
+
+          // Update the submission with validation results and new status
+          // Store only the comments array, not the entire validation result object
+          const updateResult = await db.update(table).set({
+            comments: commentsToStore,
+            status: newStatus,
+          }).where(eq(table.id, id)).returning();
+
+          console.log(`Validation completed for ${formType} submission ${id} - Status: ${newStatus}`);
+          console.log('Updated record:', JSON.stringify(updateResult, null, 2));
+        }
+      } catch (error) {
+        console.error(`Error validating submission ${id}:`, error);
+        // If validation fails, store error in comments and set status to "Requires Amendment"
+        await db.update(table).set({
+          comments: {
+            status: 'error',
+            message: 'Gemini validation failed',
+            error: error instanceof Error ? error.message : 'Unknown error',
+          },
+          status: 'Requires Amendment',
+        }).where(eq(table.id, id));
+      }
+    })();
+
+  } catch (error) {
+    console.error('Error in validate-submission endpoint:', error);
+    res.status(500).json({ message: 'Internal server error' });
   }
 });
 

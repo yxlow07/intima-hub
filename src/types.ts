@@ -92,6 +92,7 @@ export interface Submission {
     status: ActivityStatus;
     documents: string[];
     feedback?: string | any[];
+    comments?: any[]; // Gemini validation comments array
     submittedBy: string;
     submittedAt: string;
     updatedAt: string;

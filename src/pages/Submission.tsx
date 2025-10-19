@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Upload, FileText, XCircle, Send, AlertCircle, FileCheck } from 'lucide-react';
+import { Upload, FileText, XCircle, Send, AlertCircle, FileCheck, Loader } from 'lucide-react';
 import { Affiliate } from '../types';
 
 interface SubmissionProps {
@@ -18,9 +18,10 @@ interface SubmissionProps {
     handleSubmit: () => void;
     setCurrentView: (view: 'login' | 'dashboard' | 'submission' | 'tracker') => void;
     affiliates: Affiliate[];
+    isSubmitting?: boolean;
 }
 
-export default function Submission({ formData, setFormData, validationErrors, uploadedFiles, handleFileUpload, setUploadedFiles, handleSubmit, setCurrentView, affiliates }: SubmissionProps) {
+export default function Submission({ formData, setFormData, validationErrors, uploadedFiles, handleFileUpload, setUploadedFiles, handleSubmit, setCurrentView, affiliates, isSubmitting = false }: SubmissionProps) {
     const [dragActive, setDragActive] = useState(false);
 
     const handleDrag = (e: React.DragEvent) => {
@@ -208,16 +209,27 @@ export default function Submission({ formData, setFormData, validationErrors, up
                 <div className="mt-6 flex justify-end space-x-3">
                     <button
                         onClick={() => setCurrentView('tracker')}
-                        className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                        disabled={isSubmitting}
+                        className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         Cancel
                     </button>
                     <button
                         onClick={handleSubmit}
-                        className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center space-x-2"
+                        disabled={isSubmitting}
+                        className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center space-x-2 disabled:bg-gray-400 disabled:cursor-not-allowed disabled:hover:bg-gray-400"
                     >
-                        <Send className="w-4 h-4" />
-                        <span>Submit</span>
+                        {isSubmitting ? (
+                            <>
+                                <Loader className="w-4 h-4 animate-spin" />
+                                <span>Submitting...</span>
+                            </>
+                        ) : (
+                            <>
+                                <Send className="w-4 h-4" />
+                                <span>Submit</span>
+                            </>
+                        )}
                     </button>
                 </div>
             </div>

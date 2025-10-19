@@ -138,8 +138,8 @@ export default function Tracker({ currentUser, setCurrentView, onSelectSubmissio
                                                 {(() => {
                                                     let completedSteps = 0;
                                                     if (submission.status === 'Pending Validation') completedSteps = 1;
-                                                    else if (submission.status === 'Awaiting INTIMA Review') completedSteps = 2;
-                                                    else if (submission.status === 'Requires Amendment') completedSteps = 3;
+                                                    else if (submission.status === 'Requires Amendment') completedSteps = 2;
+                                                    else if (submission.status === 'Awaiting INTIMA Review') completedSteps = 3;
                                                     else if (submission.status === 'Approved' || submission.status === 'Rejected') completedSteps = 4;
 
                                                     return (
@@ -165,8 +165,8 @@ export default function Tracker({ currentUser, setCurrentView, onSelectSubmissio
                                                             <div className="flex justify-between items-start">
                                                                 {[
                                                                     'Pending Validation',
-                                                                    'INTIMA Review',
                                                                     'Amendments',
+                                                                    'INTIMA Review',
                                                                     'Final Verdict'
                                                                 ].map((label) => (
                                                                     <div key={label} className="flex-1 text-center">

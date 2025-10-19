@@ -370,7 +370,7 @@ export default function SubmissionView({ submissionId, currentUser, setCurrentVi
                                 </div>
                                 <div>
                                     <p className="text-xs text-gray-500 font-medium mb-1">Submitted</p>
-                                    <p className="text-base font-bold text-gray-900">{formatDate(submission.submittedAt)}</p>
+                                    <p className="text-base font-bold text-gray-900">{formatDateOnly(submission.submittedAt)}</p>
                                 </div>
                             </div>
                         </div>

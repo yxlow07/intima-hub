@@ -567,15 +567,24 @@ app.post('/api/submission/sap', async (req, res) => {
       return res.status(400).json({ message: 'Missing required fields' });
     }
 
+    // Convert date string to UTC+8 date object
+    // date comes as "YYYY-MM-DD" format from frontend
+    const dateParts = date.split('-');
+    const dateUTC8 = new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]));
+    const dateWithTimezone = new Date(dateUTC8.getTime() - (dateUTC8.getTimezoneOffset() * 60 * 1000) + (8 * 60 * 60 * 1000));
+
     const newSap = await db.insert(sap).values({
       affiliateId,
       activityName,
-      date: new Date(date),
+      date: dateWithTimezone,
       description: description || null,
       status: 'Pending Validation',
       submittedBy,
       files: files || null,
       comments: null,
+      submittedAt: getUTC8Date(),
+      createdAt: getUTC8Date(),
+      updatedAt: getUTC8Date(),
     }).returning();
 
     res.status(201).json(newSap[0]);
@@ -594,15 +603,24 @@ app.post('/api/submission/asf', async (req, res) => {
       return res.status(400).json({ message: 'Missing required fields' });
     }
 
+    // Convert date string to UTC+8 date object
+    // date comes as "YYYY-MM-DD" format from frontend
+    const dateParts = date.split('-');
+    const dateUTC8 = new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]));
+    const dateWithTimezone = new Date(dateUTC8.getTime() - (dateUTC8.getTimezoneOffset() * 60 * 1000) + (8 * 60 * 60 * 1000));
+
     const newAsf = await db.insert(asf).values({
       affiliateId,
       activityName,
-      date: new Date(date),
+      date: dateWithTimezone,
       description: description || null,
       status: 'Pending Validation',
       submittedBy,
       files: files || null,
       comments: null,
+      submittedAt: getUTC8Date(),
+      createdAt: getUTC8Date(),
+      updatedAt: getUTC8Date(),
     }).returning();
 
     res.status(201).json(newAsf[0]);

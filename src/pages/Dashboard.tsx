@@ -49,22 +49,33 @@ export default function Dashboard({ submissions, searchQuery, setSearchQuery, st
         'Rejected': submissions.filter(s => s.status === 'Rejected').length,
     };
 
-    // Build trends data from actual submissions grouped by date
-    const trendsByDate: Record<string, { total: number; approved: number }> = {};
+    // Build trends data from actual submissions grouped by date with all statuses
+    const trendsByDate: Record<string, Record<string, number>> = {};
     submissions.forEach(sub => {
         const date = new Date(sub.submittedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
         if (!trendsByDate[date]) {
-            trendsByDate[date] = { total: 0, approved: 0 };
+            trendsByDate[date] = {
+                'Total': 0,
+                'Approved': 0,
+                'Rejected': 0,
+            };
         }
-        trendsByDate[date].total += 1;
+        trendsByDate[date]['Total'] += 1;
         if (sub.status === 'Approved') {
-            trendsByDate[date].approved += 1;
+            trendsByDate[date]['Approved'] += 1;
+        } else if (sub.status === 'Rejected') {
+            trendsByDate[date]['Rejected'] += 1;
         }
     });
 
     const chartData = Object.entries(trendsByDate)
-        .map(([date, data]) => ({ name: date, submissions: data.total, approved: data.approved }))
-        .slice(-7); // Show last 7 days
+        .map(([date, statusCounts]) => ({
+            name: date,
+            'Total': statusCounts['Total'] || 0,
+            'Approved': statusCounts['Approved'] || 0,
+            'Rejected': statusCounts['Rejected'] || 0,
+        }))
+        .slice(-365); // Show last 365 days (full year)
 
     const statusData = [
         { name: 'Pending Validation', value: statusCounts['Pending Validation'], color: '#eab308' },
@@ -187,10 +198,25 @@ export default function Dashboard({ submissions, searchQuery, setSearchQuery, st
                             <XAxis dataKey="name" />
                             <YAxis />
                             <Tooltip contentStyle={{ border: 'none', borderRadius: '8px', backgroundColor: '#f3f4f6' }} />
-                            <Line type="monotone" dataKey="submissions" stroke="#dc2626" strokeWidth={2} />
-                            <Line type="monotone" dataKey="approved" stroke="#10b981" strokeWidth={2} />
+                            <Line type="monotone" dataKey="Total" stroke="#3b82f6" strokeWidth={2} dot={{ r: 4 }} />
+                            <Line type="monotone" dataKey="Approved" stroke="#10b981" strokeWidth={2} dot={{ r: 4 }} />
+                            <Line type="monotone" dataKey="Rejected" stroke="#ef4444" strokeWidth={2} dot={{ r: 4 }} />
                         </LineChart>
                     </ResponsiveContainer>
+                    <div className="flex flex-wrap gap-4 mt-4 justify-center">
+                        <div className="flex items-center space-x-2">
+                            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: '#3b82f6' }} />
+                            <span className="text-sm text-gray-600">Total Submissions</span>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: '#10b981' }} />
+                            <span className="text-sm text-gray-600">Approved</span>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: '#ef4444' }} />
+                            <span className="text-sm text-gray-600">Rejected</span>
+                        </div>
+                    </div>
                 </div>
 
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">

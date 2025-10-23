@@ -6,7 +6,7 @@ import API_URL from '../config';
 export default function AffiliatesPage() {
     const [affiliates, setAffiliates] = useState<Affiliate[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
-    const [categoryFilter, setCategoryFilter] = useState<'all' | 'Sports' | 'Academic' | 'Special Interest' | 'Service'>('all');
+    const [categoryFilter, setCategoryFilter] = useState<'all' | 'Sports' | 'Academic' | 'Special Interest'>('all');
     const [statusFilter, setStatusFilter] = useState<'all' | 'Active' | 'Inactive' | 'Pending Approval'>('all');
     const [currentPage, setCurrentPage] = useState(1);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -15,7 +15,7 @@ export default function AffiliatesPage() {
     const [formData, setFormData] = useState({
         name: '',
         description: '',
-        category: 'Sports' as 'Sports' | 'Academic' | 'Special Interest' | 'Service',
+        category: 'Sports' as 'Sports' | 'Academic' | 'Special Interest',
         status: 'Active' as 'Active' | 'Inactive' | 'Pending Approval',
         memberCount: 0,
         advisorId: '',
@@ -193,7 +193,6 @@ export default function AffiliatesPage() {
             case 'Sports': return 'text-blue-600 bg-blue-50';
             case 'Academic': return 'text-purple-600 bg-purple-50';
             case 'Special Interest': return 'text-pink-600 bg-pink-50';
-            case 'Service': return 'text-green-600 bg-green-50';
             default: return 'text-gray-600 bg-gray-50';
         }
     };
@@ -256,7 +255,6 @@ export default function AffiliatesPage() {
                             <option value="Sports">Sports</option>
                             <option value="Academic">Academic</option>
                             <option value="Special Interest">Special Interest</option>
-                            <option value="Service">Service</option>
                         </select>
                         <select
                             value={statusFilter}
@@ -437,7 +435,6 @@ export default function AffiliatesPage() {
                                     <option value="Sports">Sports</option>
                                     <option value="Academic">Academic</option>
                                     <option value="Special Interest">Special Interest</option>
-                                    <option value="Service">Service</option>
                                 </select>
                             </div>
 

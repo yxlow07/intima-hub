@@ -24,13 +24,10 @@ module.exports = {
         },
         {
             name: 'intima-hub-frontend',
-            script: 'npm',
-            args: 'run dev',
-            watch: ['src', 'index.html', 'vite.config.ts'],
-            watch_delay: 1000,
-            ignore_watch: ['node_modules', 'dist', 'uploads', 'logs'],
+            script: 'npx',
+            args: 'serve -s dist -l 5173',
             env: {
-                NODE_ENV: 'development',
+                NODE_ENV: 'production',
             },
             env_production: {
                 NODE_ENV: 'production',

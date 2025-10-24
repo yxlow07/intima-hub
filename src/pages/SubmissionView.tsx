@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { ChevronLeft, Download, CheckCircle, AlertCircle, Clock, XCircle, Upload, X } from 'lucide-react';
 import { Submission, User } from '../types';
 import API_URL from '../config';
+import { fetchWithHeaders } from '../utils/fetch';
 
 interface SubmissionViewProps {
     submissionId: string;
@@ -34,7 +35,7 @@ export default function SubmissionView({ submissionId, currentUser, setCurrentVi
     useEffect(() => {
         const fetchSubmission = async () => {
             try {
-                const response = await fetch(`${API_URL}/api/submission/${submissionId}`);
+                const response = await fetchWithHeaders(`${API_URL}/api/submission/${submissionId}`);
                 if (response.ok) {
                     const data = await response.json();
                     setSubmission(data);
@@ -58,7 +59,7 @@ export default function SubmissionView({ submissionId, currentUser, setCurrentVi
             setIframeError(false);
             setPdfExists(true);
 
-            fetch(`${API_URL}/api/check-file`, {
+            fetchWithHeaders(`${API_URL}/api/check-file`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -130,7 +131,7 @@ export default function SubmissionView({ submissionId, currentUser, setCurrentVi
 
         setIsAddingComment(true);
         try {
-            const response = await fetch(`${API_URL}/api/submission/${submission.id}/comment`, {
+            const response = await fetchWithHeaders(`${API_URL}/api/submission/${submission.id}/comment`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -175,7 +176,7 @@ export default function SubmissionView({ submissionId, currentUser, setCurrentVi
         if (!submission || !Array.isArray(submission.feedback) || !currentUser) return;
 
         try {
-            const response = await fetch(`${API_URL}/api/submission/${submission.id}/comment`, {
+            const response = await fetchWithHeaders(`${API_URL}/api/submission/${submission.id}/comment`, {
                 method: 'DELETE',
                 headers: {
                     'Content-Type': 'application/json',
@@ -251,7 +252,7 @@ export default function SubmissionView({ submissionId, currentUser, setCurrentVi
             formData.append('date', submission.date || new Date().toISOString().split('T')[0]);
             formData.append('isAmendment', 'true');
 
-            const uploadResponse = await fetch(`${API_URL}/api/upload`, {
+            const uploadResponse = await fetchWithHeaders(`${API_URL}/api/upload`, {
                 method: 'POST',
                 body: formData,
             });
@@ -261,7 +262,7 @@ export default function SubmissionView({ submissionId, currentUser, setCurrentVi
             const newFilePath = uploadData.filePath;
 
             // Step 2: Update submission with new document, amendment comment, and status change to "Awaiting INTIMA Review"
-            const updateResponse = await fetch(`${API_URL}/api/submission/${submission.id}/status`, {
+            const updateResponse = await fetchWithHeaders(`${API_URL}/api/submission/${submission.id}/status`, {
                 method: 'PATCH',
                 headers: {
                     'Content-Type': 'application/json',

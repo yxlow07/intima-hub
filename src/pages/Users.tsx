@@ -2,6 +2,7 @@ import { Plus, Edit2, Trash2, Search, Shield, User as UserIcon, X } from 'lucide
 import { User } from '../types';
 import { useState, useEffect } from 'react';
 import API_URL from '../config';
+import { fetchWithHeaders } from '../utils/fetch';
 
 interface UsersPageProps {
     currentUser: User | null;
@@ -58,7 +59,7 @@ export default function UsersPage({ }: UsersPageProps) {
 
     const fetchUsers = async () => {
         try {
-            const response = await fetch(`${API_URL}/api/users`);
+            const response = await fetchWithHeaders(`${API_URL}/api/users`);
             if (response.ok) {
                 const data = await response.json();
                 setUsers(data);
@@ -73,7 +74,7 @@ export default function UsersPage({ }: UsersPageProps) {
 
     const fetchAffiliates = async () => {
         try {
-            const response = await fetch(`${API_URL}/api/affiliates`);
+            const response = await fetchWithHeaders(`${API_URL}/api/affiliates`);
             if (response.ok) {
                 const data = await response.json();
                 setAffiliates(data);
@@ -203,7 +204,7 @@ export default function UsersPage({ }: UsersPageProps) {
 
         setLoading(true);
         try {
-            const response = await fetch(`${API_URL}/api/users/${selectedUser.id}`, {
+            const response = await fetchWithHeaders(`${API_URL}/api/users/${selectedUser.id}`, {
                 method: 'DELETE'
             });
 

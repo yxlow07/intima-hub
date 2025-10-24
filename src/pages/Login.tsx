@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { FileText } from 'lucide-react';
 import API_URL from '../config';
+import { fetchWithHeaders } from '../utils/fetch';
 
 interface LoginProps {
     handleLogin: (user: any) => void;
@@ -13,7 +14,7 @@ export default function Login({ handleLogin }: LoginProps) {
 
     const onLogin = async () => {
         try {
-            const response = await fetch(`${API_URL}/login`, {
+            const response = await fetchWithHeaders(`${API_URL}/login`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

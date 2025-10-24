@@ -75,7 +75,8 @@ export default function Dashboard({ submissions, searchQuery, setSearchQuery, st
             'Approved': statusCounts['Approved'] || 0,
             'Rejected': statusCounts['Rejected'] || 0,
         }))
-        .slice(-365); // Show last 365 days (full year)
+        .slice(-365) // Show last 365 days (full year)
+        .reverse(); // Reverse to show oldest date on left, newest on right
 
     const statusData = [
         { name: 'Pending Validation', value: statusCounts['Pending Validation'], color: '#eab308' },

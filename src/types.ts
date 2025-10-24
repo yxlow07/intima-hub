@@ -16,7 +16,7 @@ export interface Affiliate {
     id: string;
     name: string;
     description?: string;
-    category: 'Sports' | 'Academic' | 'Special Interest' | 'Service';
+    category: 'Sports' | 'Academic' | 'Special Interest';
     status: 'Active' | 'Inactive' | 'Pending Approval';
     memberCount: number;
     advisorId: string;

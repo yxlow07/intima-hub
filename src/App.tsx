@@ -11,6 +11,7 @@ import SubmissionView from './pages/SubmissionView';
 import Header from './components/Header';
 import Sidebar from './components/Sidebar';
 import API_URL from './config';
+import { fetchWithHeaders } from './utils/fetch';
 
 // Utility function to get current UTC+8 timestamp
 const getUTC8Timestamp = (): string => {
@@ -62,7 +63,7 @@ export default function INTIMAHub() {
     // Fetch affiliates when user changes or submission view is opened
     useEffect(() => {
         if (currentUser && currentView === 'submission') {
-            fetch(`${API_URL}/api/user/${currentUser.id}/affiliates`)
+            fetchWithHeaders(`${API_URL}/api/user/${currentUser.id}/affiliates`)
                 .then(res => res.json())
                 .then(data => {
                     setAffiliates(data);
@@ -76,7 +77,7 @@ export default function INTIMAHub() {
     // Fetch submissions when viewing dashboard
     useEffect(() => {
         if (currentUser?.role === 'intima' && currentView === 'dashboard') {
-            fetch(`${API_URL}/api/submissions`)
+            fetchWithHeaders(`${API_URL}/api/submissions`)
                 .then(res => res.json())
                 .then(data => {
                     setSubmissions(data);
@@ -128,7 +129,7 @@ export default function INTIMAHub() {
                     uploadFormData.append('activityName', formData.activityName);
                     uploadFormData.append('date', formData.date);
 
-                    const uploadResponse = await fetch(`${API_URL}/api/upload`, {
+                    const uploadResponse = await fetchWithHeaders(`${API_URL}/api/upload`, {
                         method: 'POST',
                         body: uploadFormData,
                     });
@@ -153,7 +154,7 @@ export default function INTIMAHub() {
                     submittedBy: currentUser?.id || 'Unknown',
                 };
 
-                const submitResponse = await fetch(endpoint, {
+                const submitResponse = await fetchWithHeaders(endpoint, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -229,7 +230,7 @@ export default function INTIMAHub() {
             // 2. Send file to Gemini for validation
             // 3. Parse the results
             // 4. Update the status to "Awaiting INTIMA Review" and store comments
-            const response = await fetch(`${API_URL}/api/validate-submission/${submissionId}`, {
+            const response = await fetchWithHeaders(`${API_URL}/api/validate-submission/${submissionId}`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

@@ -9,7 +9,7 @@ export const affiliates = pgTable('affiliates', {
   id: uuid('id').defaultRandom().primaryKey(),
   name: varchar('name', { length: 255 }).notNull(),
   description: text('description'),
-  category: text('category', { enum: ['Sports', 'Academic', 'Special Interest', 'Service'] }).notNull(),
+  category: text('category', { enum: ['Sports', 'Academic', 'Special Interest'] }).notNull(),
   status: text('status', { enum: ['Active', 'Inactive', 'Pending Approval'] }).notNull(),
   
   // Membership Info

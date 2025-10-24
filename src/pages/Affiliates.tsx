@@ -2,6 +2,7 @@ import { Plus, Edit2, Trash2, Search, X } from 'lucide-react';
 import { Affiliate } from '../types';
 import { useState, useEffect } from 'react';
 import API_URL from '../config';
+import { fetchWithHeaders } from '../utils/fetch';
 
 export default function AffiliatesPage() {
     const [affiliates, setAffiliates] = useState<Affiliate[]>([]);
@@ -33,7 +34,7 @@ export default function AffiliatesPage() {
 
     const fetchAffiliates = async () => {
         try {
-            const response = await fetch(`${API_URL}/api/affiliates`);
+            const response = await fetchWithHeaders(`${API_URL}/api/affiliates`);
             if (response.ok) {
                 const data = await response.json();
                 setAffiliates(data);
@@ -151,7 +152,7 @@ export default function AffiliatesPage() {
 
         setLoading(true);
         try {
-            const response = await fetch(`${API_URL}/api/affiliates/${selectedAffiliate.id}`, {
+            const response = await fetchWithHeaders(`${API_URL}/api/affiliates/${selectedAffiliate.id}`, {
                 method: 'DELETE'
             });
 

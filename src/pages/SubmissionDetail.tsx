@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 
 import { Submission, User } from '../types';
 import API_URL from '../config';
+import { fetchWithHeaders } from '../utils/fetch';
 
 interface SubmissionDetailProps {
     submission: Submission;
@@ -21,7 +22,7 @@ export default function SubmissionDetail({ submission, currentUser }: Submission
             setPdfExists(true); // Assume it exists until proven otherwise
 
             // Use server endpoint to check if file exists using Node.js fs module
-            fetch(`${API_URL}/api/check-file`, {
+            fetchWithHeaders(`${API_URL}/api/check-file`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -93,7 +94,7 @@ export default function SubmissionDetail({ submission, currentUser }: Submission
 
     const refreshSubmissionDetails = async () => {
         try {
-            const response = await fetch(`${API_URL}/api/submission/${submission.id}`);
+            const response = await fetchWithHeaders(`${API_URL}/api/submission/${submission.id}`);
             if (response.ok) {
                 const updatedSubmission = await response.json();
                 // Update all submission fields
@@ -129,7 +130,7 @@ export default function SubmissionDetail({ submission, currentUser }: Submission
                 formData.append('file', signedFormFile);
                 formData.append('isSigned', 'true');
 
-                const uploadResponse = await fetch(`${API_URL}/api/upload`, {
+                const uploadResponse = await fetchWithHeaders(`${API_URL}/api/upload`, {
                     method: 'POST',
                     body: formData,
                 });
@@ -145,7 +146,7 @@ export default function SubmissionDetail({ submission, currentUser }: Submission
 
             const url = `${API_URL}/api/submissions/${submission.id}/status`;
 
-            const response = await fetch(url, {
+            const response = await fetchWithHeaders(url, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',

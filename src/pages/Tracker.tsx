@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Eye, CheckCircle, AlertCircle, Clock, XCircle } from 'lucide-react';
 import { Submission, User } from '../types';
 import API_URL from '../config';
+import { fetchWithHeaders } from '../utils/fetch';
 
 interface TrackerProps {
     currentUser: User | null;
@@ -16,7 +17,7 @@ export default function Tracker({ currentUser, setCurrentView, onSelectSubmissio
 
     useEffect(() => {
         if (currentUser) {
-            fetch(`${API_URL}/api/submissions/user/${currentUser.id}`)
+            fetchWithHeaders(`${API_URL}/api/submissions/user/${currentUser.id}`)
                 .then(res => res.json())
                 .then(data => {
                     setSubmissions(data);

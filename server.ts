@@ -1382,7 +1382,7 @@ app.post('/api/affiliates', async (req, res) => {
     return res.status(400).json({ message: 'Name, category, status, and advisor ID are required' });
   }
 
-  if (!['Sports', 'Academic', 'Special Interest', 'Service'].includes(category)) {
+  if (!['Sports', 'Academic', 'Special Interest'].includes(category)) {
     return res.status(400).json({ message: 'Invalid category' });
   }
 
@@ -1435,7 +1435,7 @@ app.put('/api/affiliates/:id', async (req, res) => {
     }
 
     // Validate category and status if provided
-    if (category && !['Sports', 'Academic', 'Special Interest', 'Service'].includes(category)) {
+    if (category && !['Sports', 'Academic', 'Special Interest'].includes(category)) {
       return res.status(400).json({ message: 'Invalid category' });
     }
 

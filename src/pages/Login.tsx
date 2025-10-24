@@ -14,7 +14,7 @@ export default function Login({ handleLogin }: LoginProps) {
 
     const onLogin = async () => {
         try {
-            const response = await fetchWithHeaders(`${API_URL}/login`, {
+            const response = await fetchWithHeaders(`${API_URL}/api/login`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

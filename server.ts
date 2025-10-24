@@ -61,7 +61,7 @@ app.use(cors());
 app.use(bodyParser.json());
 app.use('/uploads', express.static(uploadsDir));
 
-app.post('/login', async (req, res) => {
+app.post('/api/login', async (req, res) => {
   const { email, password } = req.body;
 
   if (!email || !password) {

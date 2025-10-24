@@ -2,11 +2,9 @@ module.exports = {
     apps: [
         {
             name: 'intima-hub-backend',
-            script: './server.ts',
-            interpreter: 'tsx',
-            watch: ['server.ts', 'src/db'],
-            watch_delay: 1000,
-            ignore_watch: ['node_modules', 'dist', 'uploads', 'logs'],
+            script: './start-backend.js',
+            cwd: 'e:\\[03]_Programming\\[00]_Projects\\intima_hub',
+            watch: false,
             env: {
                 NODE_ENV: 'development',
                 PORT: 3001,
@@ -24,8 +22,8 @@ module.exports = {
         },
         {
             name: 'intima-hub-frontend',
-            script: 'npx',
-            args: 'serve -s dist -l 5173',
+            script: './serve-frontend.js',
+            cwd: 'e:\\[03]_Programming\\[00]_Projects\\intima_hub',
             env: {
                 NODE_ENV: 'production',
             },

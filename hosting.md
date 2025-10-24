@@ -1,519 +1,650 @@
-# Hosting INTIMA Hub on DigitalOcean - Step-by-Step Guide
+# Hosting on DigitalOcean
 
-This guide walks through deploying the INTIMA Hub application (Vite frontend + Express backend + PostgreSQL) on a DigitalOcean Ubuntu Node.js droplet.
+This guide will walk you through deploying the Intima Hub application to DigitalOcean.
+
+## Table of Contents
+
+1. [Prerequisites](#prerequisites)
+2. [Setup DigitalOcean Account](#setup-digitalocean-account)
+3. [Create a Droplet](#create-a-droplet)
+4. [SSH into Your Droplet](#ssh-into-your-droplet)
+5. [Install Dependencies](#install-dependencies)
+6. [Clone Your Repository](#clone-your-repository)
+7. [Configure Environment Variables](#configure-environment-variables)
+8. [Setup PM2](#setup-pm2)
+9. [Configure Database](#configure-database)
+10. [Setup Reverse Proxy (Nginx)](#setup-reverse-proxy-nginx)
+11. [SSL Certificate (Let's Encrypt)](#ssl-certificate-lets-encrypt)
+12. [Monitoring and Logs](#monitoring-and-logs)
 
 ---
 
 ## Prerequisites
 
-- DigitalOcean account
-- A domain name (optional, but recommended)
-- SSH client installed locally
-- Git installed on your local machine
+- A DigitalOcean account (sign up at [digitalocean.com](https://www.digitalocean.com))
+- SSH client installed on your local machine
+- Git installed and configured
+- Basic command-line knowledge
 
 ---
 
-## Step 1: Create a DigitalOcean Droplet
+## Setup DigitalOcean Account
 
-1. Go to [DigitalOcean Console](https://cloud.digitalocean.com)
-2. Click **Create** → **Droplets**
-3. Configure:
-   - **Image**: Ubuntu 22.04 LTS (recommended) or latest LTS
-   - **Size**: $4-6/month ($5) for small apps, or higher based on expected traffic
-   - **Region**: Choose closest to your users
-   - **Authentication**: SSH Key (recommended) or Password
-   - **Hostname**: `intima-hub` or similar
-4. Click **Create Droplet**
-
-**Note the Droplet's IP address** (e.g., `123.45.67.89`)
+1. Create an account at [DigitalOcean](https://www.digitalocean.com)
+2. Add your payment method
+3. Create a new SSH key pair (recommended for security):
+   ```bash
+   ssh-keygen -t rsa -b 4096 -C "your_email@example.com"
+   ```
+4. Add the public key to your DigitalOcean account:
+   - Go to Settings → Security → SSH keys
+   - Click "Add SSH Key"
+   - Paste your public key and give it a name
 
 ---
 
-## Step 2: Initial Server Setup
+## Create a Droplet
 
-### 2.1 SSH into your droplet
+1. Click "Create" → "Droplets"
+2. **Choose an image**: Select Ubuntu 22.04 or latest LTS
+3. **Choose a size**:
+   - Start with Basic ($4-5/month) for testing
+   - Scale up to Standard ($12+/month) for production
+4. **Choose a region**: Select the closest region to your users
+5. **Authentication**: Select your SSH key from prerequisites
+6. **Hostname**: Give it a meaningful name (e.g., `intima-hub`)
+7. **Click "Create Droplet"**
+
+Wait a few minutes for the droplet to be created.
+
+---
+
+## SSH into Your Droplet
+
+1. Get your droplet's IP address from the DigitalOcean console
+2. SSH into your droplet:
+   ```bash
+   ssh root@YOUR_DROPLET_IP
+   ```
+3. Update system packages:
+   ```bash
+   apt update && apt upgrade -y
+   ```
+
+---
+
+## Install Dependencies
+
+### Install Node.js and npm
 
 ```bash
-ssh root@YOUR_DROPLET_IP
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt-get install -y nodejs
 ```
 
-### 2.2 Update system packages
+Verify installation:
 
 ```bash
-apt update && apt upgrade -y
-```
-
-### 2.3 Install Node.js (v18 LTS or latest)
-
-```bash
-curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-apt install -y nodejs
 node --version
 npm --version
 ```
 
-### 2.4 Install PostgreSQL
+### Install PM2 globally
 
 ```bash
-apt install -y postgresql postgresql-contrib
-systemctl start postgresql
-systemctl enable postgresql
+sudo npm install -g pm2
 ```
 
-### 2.5 Install PM2 globally
+### Install Git
 
 ```bash
-npm install -g pm2
+sudo apt-get install -y git
 ```
 
-### 2.6 Install other utilities
+### Install Nginx (for reverse proxy)
 
 ```bash
-apt install -y git curl wget nginx certbot python3-certbot-nginx
+sudo apt-get install -y nginx
 ```
 
----
-
-## Step 3: Set Up PostgreSQL Database
-
-### 3.1 Create database and user
+### Install PostgreSQL (if using database)
 
 ```bash
-sudo -u postgres psql
+sudo apt-get install -y postgresql postgresql-contrib
 ```
 
-Inside psql prompt:
-
-```sql
-CREATE DATABASE intima_hub;
-ALTER USER postgres WITH PASSWORD 'root';
-GRANT ALL PRIVILEGES ON DATABASE intima_hub TO postgres;
-\q
-```
-
-**Note**: The `postgres` user already exists by default, so we use `ALTER USER` instead of `CREATE USER`. Save your database credentials securely.
-
-### 3.2 Test connection (optional)
+Start PostgreSQL:
 
 ```bash
-psql -U postgres -d intima_hub -h localhost
+sudo systemctl start postgresql
+sudo systemctl enable postgresql
 ```
 
 ---
 
-## Step 4: Clone and Set Up Application
+## Clone Your Repository
 
-### 4.1 Create app directory
+1. Generate SSH keys on the server:
+
+   ```bash
+   ssh-keygen -t rsa -b 4096
+   ```
+
+2. Add the public key to your GitHub repository settings:
+
+   - Copy the key: `cat ~/.ssh/id_rsa.pub`
+   - Go to GitHub → Settings → SSH and GPG keys
+   - Add the new SSH key
+
+3. Clone your repository:
+
+   ```bash
+   cd /var/www
+   sudo git clone git@github.com:yxlow07/intima-hub.git
+   cd intima-hub
+   ```
+
+4. Change ownership to your user (optional but recommended):
+   ```bash
+   sudo chown -R $USER:$USER /var/www/intima-hub
+   ```
+
+---
+
+## Configure Environment Variables
+
+1. Create a `.env` file in the project root:
+
+   ```bash
+   nano /var/www/intima-hub/.env
+   ```
+
+2. Add your environment variables:
+
+   ```env
+   NODE_ENV=production
+   PORT=3001
+   DATABASE_URL=postgresql://username:password@localhost:5432/intima_hub
+   # Add other required environment variables here
+   ```
+
+3. Save the file (Ctrl+X, then Y, then Enter)
+
+---
+
+## Install Project Dependencies
 
 ```bash
-mkdir -p /var/www/intima-hub
 cd /var/www/intima-hub
-```
-
-### 4.2 Clone repository
-
-```bash
-git clone https://github.com/yxlow07/intima-hub.git .
-```
-
-### 4.3 Install dependencies
-
-```bash
 npm install
 ```
 
-### 4.4 Create `.env` file
-
-```bash
-nano .env
-```
-
-Add your environment variables:
-
-```env
-# Database
-DATABASE_URL=postgresql://postgres:root@localhost:5432/intima_hub
-
-# Node Environment
-NODE_ENV=production
-
-# Backend Port
-PORT=3001
-
-# Frontend Build
-VITE_API_URL=https://yourdomain.com
-
-# Google Gemini API
-GEMINI_API_KEY=your_gemini_api_key_here
-GEMINI_MODEL=gemini-2.0-flash
-```
-
-Save with `Ctrl+X` → `Y` → `Enter`
-
-### 4.5 Run database migrations
-
-```bash
-npm run db:migrate
-```
-
-### 4.6 Build frontend
+Build the frontend:
 
 ```bash
 npm run build
 ```
 
----
-
-## Step 5: Configure PM2
-
-### 5.1 Update `ecosystem.config.js` for production
-
-The existing config is already set up. For production, update the frontend script to serve the built files instead of dev server:
-
-**Replace the frontend app section in `ecosystem.config.js`:**
-
-```javascript
-{
-  name: 'intima-hub-frontend',
-  script: 'npx',
-  args: 'serve -s dist -l 5173',
-  env: {
-    NODE_ENV: 'production',
-  },
-  env_production: {
-    NODE_ENV: 'production',
-  },
-  instances: 1,
-  exec_mode: 'fork',
-  max_memory_restart: '500M',
-  error_file: './logs/frontend-err.log',
-  out_file: './logs/frontend-out.log',
-  log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
-},
-```
-
-Or simply run backend only and use Nginx to serve the frontend (recommended - see Step 6).
-
-### 5.2 Start PM2 with production config
+Migrate database (if needed):
 
 ```bash
-pm2 start ecosystem.config.js --env production
+npm run db:migrate
 ```
 
-### 5.3 Save PM2 config to auto-start on reboot
+Seed database (if needed):
+
+```bash
+npm run db:seed
+```
+
+---
+
+## Setup PM2
+
+### Start with PM2
+
+```bash
+cd /var/www/intima-hub
+pm2 start ecosystem.config.js
+```
+
+### Verify processes are running
+
+```bash
+pm2 status
+```
+
+You should see:
+
+- `intima-hub-backend` - online
+- `intima-hub-frontend` - online
+
+### Setup PM2 to start on boot
 
 ```bash
 pm2 startup
 pm2 save
 ```
 
-Follow the instructions PM2 provides.
+Copy and run the command that's output by `pm2 startup`.
 
-### 5.4 Monitor PM2
+### View logs
 
 ```bash
-pm2 monit
-pm2 logs
+pm2 logs intima-hub-backend
+pm2 logs intima-hub-frontend
 ```
 
 ---
 
-## Step 6: Configure Nginx as Reverse Proxy
+## Configure Database
 
-### 6.1 Create Nginx config
+### Create PostgreSQL User and Database
 
 ```bash
-nano /etc/nginx/sites-available/intima-hub
+sudo -u postgres psql
 ```
 
-Add:
+Inside psql:
+
+```sql
+CREATE USER intima_user WITH PASSWORD 'your_secure_password';
+CREATE DATABASE intima_hub OWNER intima_user;
+ALTER ROLE intima_user SET client_encoding TO 'utf8';
+ALTER ROLE intima_user SET default_transaction_isolation TO 'read committed';
+ALTER ROLE intima_user SET default_transaction_deferrable TO on;
+ALTER ROLE intima_user SET default_transaction_read_only TO off;
+ALTER ROLE intima_user SET timezone TO 'UTC';
+GRANT ALL PRIVILEGES ON DATABASE intima_hub TO intima_user;
+\q
+```
+
+---
+
+## Setup Reverse Proxy (Nginx)
+
+### Create Nginx configuration
+
+```bash
+sudo nano /etc/nginx/sites-available/intima-hub
+```
+
+Paste this configuration:
 
 ```nginx
 upstream backend {
-    server localhost:3001;
+    server 127.0.0.1:3001;
+}
+
+upstream frontend {
+    server 127.0.0.1:5173;
 }
 
 server {
     listen 80;
-    server_name YOUR_DOMAIN.com www.YOUR_DOMAIN.com;
+    server_name your_domain.com www.your_domain.com;
 
-    root /var/www/intima-hub/dist;
-    index index.html;
+    # Redirect HTTP to HTTPS (uncomment after SSL is set up)
+    # return 301 https://$server_name$request_uri;
 
-    # Serve static files
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
-
-    # API proxy to Express backend
-    location /api/ {
+    # API endpoints
+    location /api {
         proxy_pass http://backend;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
         proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
     }
 
-    # File uploads endpoint
-    location /uploads/ {
+    # Login endpoint
+    location /login {
         proxy_pass http://backend;
+        proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     }
+
+    # Uploads
+    location /uploads {
+        proxy_pass http://backend;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+
+    # Frontend
+    location / {
+        proxy_pass http://frontend;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+    }
 }
 ```
 
-### 6.2 Enable the site
+### Enable the site
 
 ```bash
-ln -s /etc/nginx/sites-available/intima-hub /etc/nginx/sites-enabled/
-rm /etc/nginx/sites-enabled/default  # Remove default config if desired
+sudo ln -s /etc/nginx/sites-available/intima-hub /etc/nginx/sites-enabled/
+sudo rm /etc/nginx/sites-enabled/default
 ```
 
-### 6.3 Test and reload Nginx
+### Test and restart Nginx
 
 ```bash
-nginx -t
-systemctl reload nginx
+sudo nginx -t
+sudo systemctl restart nginx
 ```
 
 ---
 
-## Step 7: Set Up SSL Certificate (HTTPS)
+## SSL Certificate (Let's Encrypt)
 
-### 7.1 Install SSL with Certbot
-
-```bash
-certbot --nginx -d YOUR_DOMAIN.com -d www.YOUR_DOMAIN.com
-```
-
-Follow the prompts. Certbot will automatically update Nginx config.
-
-### 7.2 Auto-renew certificates
+### Install Certbot
 
 ```bash
-systemctl enable certbot.timer
-systemctl start certbot.timer
+sudo apt-get install -y certbot python3-certbot-nginx
 ```
 
----
-
-## Step 8: Configure Firewall
-
-### 8.1 Enable UFW (if not already)
+### Generate SSL certificate
 
 ```bash
-ufw enable
+sudo certbot certonly --nginx -d your_domain.com -d www.your_domain.com
 ```
 
-### 8.2 Allow SSH, HTTP, HTTPS
+### Update Nginx configuration with SSL
+
+Edit the configuration again:
 
 ```bash
-ufw allow 22/tcp
-ufw allow 80/tcp
-ufw allow 443/tcp
+sudo nano /etc/nginx/sites-available/intima-hub
 ```
 
-### 8.3 Verify rules
+Replace the configuration with:
 
-```bash
-ufw status
-```
+```nginx
+upstream backend {
+    server 127.0.0.1:3001;
+}
 
----
+upstream frontend {
+    server 127.0.0.1:5173;
+}
 
-## Step 9: Set Up Log Rotation
+server {
+    listen 80;
+    server_name your_domain.com www.your_domain.com;
+    return 301 https://$server_name$request_uri;
+}
 
-Create log rotation config:
+server {
+    listen 443 ssl http2;
+    server_name your_domain.com www.your_domain.com;
 
-```bash
-nano /etc/logrotate.d/intima-hub
-```
+    ssl_certificate /etc/letsencrypt/live/your_domain.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/your_domain.com/privkey.pem;
 
-Add:
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+    ssl_prefer_server_ciphers on;
 
-```
-/var/www/intima-hub/logs/*.log {
-    daily
-    rotate 14
-    compress
-    delaycompress
-    notifempty
-    create 0640 nobody adm
-    sharedscripts
-    postrotate
-        pm2 reload ecosystem.config.js >> /dev/null 2>&1 || true
-    endscript
+    # API endpoints
+    location /api {
+        proxy_pass http://backend;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+
+    # Login endpoint
+    location /login {
+        proxy_pass http://backend;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+
+    # Uploads
+    location /uploads {
+        proxy_pass http://backend;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+
+    # Frontend
+    location / {
+        proxy_pass http://frontend;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+    }
 }
 ```
 
----
-
-## Step 10: Verify Deployment
-
-### 10.1 Check PM2 processes
+### Restart Nginx
 
 ```bash
-pm2 list
+sudo nginx -t
+sudo systemctl restart nginx
 ```
 
-### 10.2 View logs
+### Setup auto-renewal for SSL
+
+```bash
+sudo certbot renew --dry-run
+```
+
+---
+
+## Monitoring and Logs
+
+### Check application logs
+
+```bash
+pm2 logs
+```
+
+### Check specific application logs
 
 ```bash
 pm2 logs intima-hub-backend
+pm2 logs intima-hub-frontend
 ```
 
-### 10.3 Test the application
-
-Visit `https://YOUR_DOMAIN.com` in your browser.
-
----
-
-## Useful Commands
-
-### PM2 Management
+### View Nginx logs
 
 ```bash
-pm2 start ecosystem.config.js --env production
-pm2 restart all
-pm2 stop all
-pm2 delete all
-pm2 logs
+# Access logs
+sudo tail -f /var/log/nginx/access.log
+
+# Error logs
+sudo tail -f /var/log/nginx/error.log
+```
+
+### Monitor system resources
+
+```bash
 pm2 monit
-pm2 info intima-hub-backend
 ```
 
-### Database Management
+### Check PM2 processes status
 
 ```bash
-# Connect to database
-psql -U postgres -d intima_hub
-
-# Backup database
-pg_dump -U postgres -d intima_hub > backup.sql
-
-# Restore database
-psql -U postgres -d intima_hub < backup.sql
-```
-
-### Application Updates
-
-```bash
-cd /var/www/intima-hub
-git pull origin main
-npm install
-npm run build
-npm run db:migrate  # If schema changes
-pm2 restart all
-```
-
-### Nginx Management
-
-```bash
-systemctl restart nginx
-systemctl status nginx
-nginx -t  # Test config
-tail -f /var/log/nginx/error.log
+pm2 status
+pm2 describe intima-hub-backend
 ```
 
 ---
 
 ## Troubleshooting
 
-### Application not starting
+### Backend not connecting
 
-```bash
-pm2 logs  # Check error logs
-pm2 stop all
-pm2 start ecosystem.config.js --env production
-```
+1. Check if backend is running:
+
+   ```bash
+   pm2 status
+   ```
+
+2. Check backend logs:
+
+   ```bash
+   pm2 logs intima-hub-backend --lines 50
+   ```
+
+3. Verify port is listening:
+   ```bash
+   netstat -tlnp | grep 3001
+   ```
 
 ### Database connection issues
 
-- Verify `.env` DATABASE_URL is correct
-- Check PostgreSQL is running: `systemctl status postgresql`
-- Test connection: `psql -U intima_user -d intima_hub -h localhost`
+1. Check PostgreSQL is running:
 
-### Port 3001 already in use
+   ```bash
+   sudo systemctl status postgresql
+   ```
 
-```bash
-lsof -i :3001
-kill -9 PID
-```
+2. Test database connection:
+
+   ```bash
+   psql -U intima_user -d intima_hub -h localhost
+   ```
+
+3. Check DATABASE_URL in `.env` file
+
+### Nginx issues
+
+1. Test Nginx configuration:
+
+   ```bash
+   sudo nginx -t
+   ```
+
+2. Check Nginx logs:
+
+   ```bash
+   sudo tail -f /var/log/nginx/error.log
+   ```
+
+3. Restart Nginx:
+   ```bash
+   sudo systemctl restart nginx
+   ```
 
 ### SSL certificate issues
 
+1. Check certificate status:
+
+   ```bash
+   sudo certbot certificates
+   ```
+
+2. Test SSL:
+   ```bash
+   sudo certbot renew --dry-run
+   ```
+
+---
+
+## Deployment Updates
+
+To update your application after pushing changes to GitHub:
+
 ```bash
-certbot renew --dry-run
-certbot certificates
+cd /var/www/intima-hub
+git pull origin main
+npm install
+npm run build
+npm run db:migrate  # if needed
+pm2 restart all
 ```
 
-### Nginx not serving static files
+Or create a script for automated deployments:
 
-- Verify `root /var/www/intima-hub/dist;` exists
-- Check permissions: `ls -la /var/www/intima-hub/`
-- Reload: `systemctl reload nginx`
+```bash
+#!/bin/bash
+cd /var/www/intima-hub
+git pull origin main
+npm install
+npm run build
+npm run db:migrate
+pm2 restart all
+pm2 save
+```
+
+Save as `deploy.sh` and make it executable:
+
+```bash
+chmod +x /var/www/intima-hub/deploy.sh
+```
 
 ---
 
-## Security Recommendations
+## Security Best Practices
 
-1. **SSH Keys**: Use SSH keys instead of password login
+1. **Firewall**: Enable UFW firewall
 
    ```bash
-   # Disable password authentication in /etc/ssh/sshd_config
-   nano /etc/ssh/sshd_config
-   # Change PasswordAuthentication to no
-   systemctl restart ssh
+   sudo ufw allow 22/tcp
+   sudo ufw allow 80/tcp
+   sudo ufw allow 443/tcp
+   sudo ufw enable
    ```
 
-2. **Fail2Ban**: Install to protect against brute force
+2. **Keep system updated**:
 
    ```bash
-   apt install -y fail2ban
-   systemctl enable fail2ban
+   sudo apt update && sudo apt upgrade -y
    ```
 
-3. **Environment Variables**: Keep `.env` secure and never commit to Git
+3. **Use strong passwords** for database and admin accounts
+
+4. **Backup your data regularly**:
 
    ```bash
-   chmod 600 .env
+   sudo pg_dump -U intima_user intima_hub > backup.sql
    ```
 
-4. **Database Password**: Use strong password and consider restricting PostgreSQL to localhost only
-
-5. **Regular Backups**: Set up automated database backups
+5. **Monitor logs regularly** for suspicious activity
 
 ---
 
-## Performance Optimization
+## Additional Resources
 
-1. **Enable Gzip compression** in Nginx (usually enabled by default)
-2. **Configure caching** headers for static assets in Nginx
-3. **Consider CDN** for static files if serving globally
-4. **Monitor memory/CPU** regularly with `pm2 monit`
-5. **Set up uptime monitoring** (e.g., UptimeRobot, Pingdom)
-
----
-
-## Next Steps
-
-1. Set up automated backups for PostgreSQL
-2. Configure monitoring/alerting
-3. Set up CI/CD pipeline (e.g., GitHub Actions) for auto-deployment
-4. Add email notifications for errors
-5. Scale to multiple instances as needed
-
----
-
-For questions or issues, refer to:
-
-- [DigitalOcean Docs](https://docs.digitalocean.com)
+- [DigitalOcean Documentation](https://docs.digitalocean.com/)
 - [PM2 Documentation](https://pm2.keymetrics.io/)
 - [Nginx Documentation](https://nginx.org/en/docs/)
-- Project README: `README.md`
+- [PostgreSQL Documentation](https://www.postgresql.org/docs/)
+- [Let's Encrypt Documentation](https://letsencrypt.org/docs/)
+
+---
+
+## Support
+
+For issues or questions:
+
+1. Check the logs: `pm2 logs`
+2. Review the troubleshooting section above
+3. Check DigitalOcean docs and community
+4. Open an issue on GitHub
+
+Happy hosting! 🚀

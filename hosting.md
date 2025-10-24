@@ -282,7 +282,7 @@ upstream frontend {
 
 server {
     listen 80;
-    server_name your_domain.com www.your_domain.com;
+    server_name intima.page www.intima.page;
 
     # Redirect HTTP to HTTPS (uncomment after SSL is set up)
     # return 301 https://$server_name$request_uri;
@@ -357,7 +357,7 @@ sudo apt-get install -y certbot python3-certbot-nginx
 ### Generate SSL certificate
 
 ```bash
-sudo certbot certonly --nginx -d your_domain.com -d www.your_domain.com
+sudo certbot certonly --nginx -d intima.page -d www.intima.page
 ```
 
 ### Update Nginx configuration with SSL
@@ -381,16 +381,16 @@ upstream frontend {
 
 server {
     listen 80;
-    server_name your_domain.com www.your_domain.com;
+    server_name intima.page www.intima.page;
     return 301 https://$server_name$request_uri;
 }
 
 server {
     listen 443 ssl http2;
-    server_name your_domain.com www.your_domain.com;
+    server_name intima.page www.intima.page;
 
-    ssl_certificate /etc/letsencrypt/live/your_domain.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/your_domain.com/privkey.pem;
+    ssl_certificate /etc/letsencrypt/live/intima.page/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/intima.page/privkey.pem;
 
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_ciphers HIGH:!aNULL:!MD5;

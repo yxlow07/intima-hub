@@ -131,7 +131,7 @@ nano .env
 Add your environment variables:
 
 ```env
-# Database (use localhost - PostgreSQL is on same server)
+# Database
 DATABASE_URL=postgresql://postgres:root@localhost:5432/intima_hub
 
 # Node Environment
@@ -140,9 +140,8 @@ NODE_ENV=production
 # Backend Port
 PORT=3001
 
-# Frontend Build (use your actual domain or server IP - frontend runs in browser)
+# Frontend Build
 VITE_API_URL=https://yourdomain.com
-# or if using IP: VITE_API_URL=https://123.45.67.89
 
 # Google Gemini API
 GEMINI_API_KEY=your_gemini_api_key_here

@@ -1,5 +1,5 @@
 {
-  "id": "0ea60b73-683d-490e-907f-4058a5f0dc1f",
+  "id": "654deb21-6051-4176-a6bc-cfb72afbb133",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -197,9 +197,59 @@
           "primaryKey": false,
           "notNull": false
         },
-        "file_url": {
-          "name": "file_url",
-          "type": "varchar(512)",
+        "files": {
+          "name": "files",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "finance_review_status": {
+          "name": "finance_review_status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'Pending'"
+        },
+        "finance_comments": {
+          "name": "finance_comments",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "finance_reviewed_by": {
+          "name": "finance_reviewed_by",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "finance_reviewed_at": {
+          "name": "finance_reviewed_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "activities_review_status": {
+          "name": "activities_review_status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'Pending'"
+        },
+        "activities_comments": {
+          "name": "activities_comments",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "activities_reviewed_by": {
+          "name": "activities_reviewed_by",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "activities_reviewed_at": {
+          "name": "activities_reviewed_at",
+          "type": "timestamp",
           "primaryKey": false,
           "notNull": false
         },
@@ -286,9 +336,59 @@
           "primaryKey": false,
           "notNull": false
         },
-        "file_url": {
-          "name": "file_url",
-          "type": "varchar(512)",
+        "files": {
+          "name": "files",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "finance_review_status": {
+          "name": "finance_review_status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'Pending'"
+        },
+        "finance_comments": {
+          "name": "finance_comments",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "finance_reviewed_by": {
+          "name": "finance_reviewed_by",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "finance_reviewed_at": {
+          "name": "finance_reviewed_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "activities_review_status": {
+          "name": "activities_review_status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'Pending'"
+        },
+        "activities_comments": {
+          "name": "activities_comments",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "activities_reviewed_by": {
+          "name": "activities_reviewed_by",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "activities_reviewed_at": {
+          "name": "activities_reviewed_at",
+          "type": "timestamp",
           "primaryKey": false,
           "notNull": false
         },
@@ -386,6 +486,12 @@
         "email": {
           "name": "email",
           "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "password": {
+          "name": "password",
+          "type": "text",
           "primaryKey": false,
           "notNull": true
         },
